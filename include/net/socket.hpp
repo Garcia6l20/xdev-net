@@ -101,7 +101,8 @@ struct socket
     }
 
     template <typename ReceiverT>
-    thread_stopper start_receiver(ReceiverT&& receiver) {
+    [[nodiscard]] thread_stopper
+    start_receiver(ReceiverT&& receiver) {
         auto running = std::make_shared<std::atomic_bool>(true);
         return thread_stopper{std::thread([this, rx = std::forward<ReceiverT>(receiver), running]() mutable {
             std::vector<char> data;
@@ -138,10 +139,11 @@ struct socket
         send(buffer.data(), buffer.size(), to);
     }
 
-    template <typename AcceptFuntor>
-    thread_stopper listen(AcceptFuntor&& functor, int max_conn = 100) {
+    template <SocketAcceptor AcceptFunctorT>
+    [[nodiscard]] thread_stopper
+    listen(AcceptFunctorT&& functor, int max_conn = 100) {
         auto running = std::make_shared<std::atomic<bool>>(true);
-        return thread_stopper{std::thread([this, f = std::forward<AcceptFuntor>(functor), running, max_conn]() mutable {
+        return thread_stopper{std::thread([this, f = std::forward<AcceptFunctorT>(functor), running, max_conn]() mutable {
             struct sockaddr peer_add;
             socklen_t peer_add_sz = sizeof(peer_add);
             struct timeval to_tv;
@@ -150,7 +152,6 @@ struct socket
             fd_set read_set;
             if (::listen(_fd, max_conn) != 0)
                 throw error(errno);
-            std::cout << "listening" << std::endl;
             while (*running) {
                 FD_ZERO(&read_set);
                 FD_SET(_fd, &read_set);
@@ -170,6 +171,7 @@ struct socket
     void connect(const address& address);
 
     int fd() const { return _fd; }
+
 private:
     int _fd;
 };
