@@ -31,23 +31,35 @@ concept SocketAcceptor = requires(T a) {
 #define SocketAcceptor typename
 #endif
 
-struct thread_stopper {
-    thread_stopper() = default;
-    thread_stopper(std::thread&& thread, std::shared_ptr<std::atomic_bool> running):
+struct thread_guard {
+    thread_guard() = default;
+    thread_guard(std::thread&& thread, std::shared_ptr<std::atomic_bool> running):
         _thread(std::move(thread)),
         _running(running){}
-    void  operator()() {
+	thread_guard(const thread_guard&) = delete;
+	thread_guard& operator=(const thread_guard&) = delete;
+	thread_guard(thread_guard&& other) noexcept:
+		_running(std::move(other._running)),
+		_thread(std::move(other._thread)) {
+	}
+	thread_guard& operator=(thread_guard&& other) noexcept {
+		_running = std::move(other._running);
+		_thread = std::move(other._thread);
+		return *this;
+	}
+	~thread_guard() {
+		(*this)();
+	}
+    void operator()() {
         if (!*this)
             return;
         *_running = false;
         _thread.join();
+		_running.reset();
+		_thread = std::thread();
     }
     operator bool() {
         return _running && _thread.joinable();
-    }
-    void operator =(nullptr_t /*p*/) {
-        _running.reset();
-        _thread = std::thread();
     }
 private:
     std::thread _thread;
@@ -110,10 +122,10 @@ struct socket
     }
 
     template <typename ReceiverT>
-    [[nodiscard]] thread_stopper
+    [[nodiscard]] thread_guard
     start_receiver(ReceiverT&& receiver) {
         auto running = std::make_shared<std::atomic_bool>(true);
-        return thread_stopper{std::thread([this, rx = std::forward<ReceiverT>(receiver), running]() mutable {
+        return thread_guard{std::thread([this, rx = std::forward<ReceiverT>(receiver), running]() mutable {
             std::vector<char> data;
             while (*running) {
                 auto from = receive(data, std::chrono::milliseconds(25));
@@ -149,10 +161,10 @@ struct socket
     }
 
     template <SocketAcceptor AcceptFunctorT>
-    [[nodiscard]] thread_stopper
+    [[nodiscard]] thread_guard
     listen(AcceptFunctorT&& functor, int max_conn = 100) {
         auto running = std::make_shared<std::atomic<bool>>(true);
-        return thread_stopper{std::thread([this, f = std::forward<AcceptFunctorT>(functor), running, max_conn]() mutable {
+        return thread_guard{std::thread([this, f = std::forward<AcceptFunctorT>(functor), running, max_conn]() mutable {
             struct sockaddr peer_add;
             socklen_t peer_add_sz = sizeof(peer_add);
             struct timeval to_tv;

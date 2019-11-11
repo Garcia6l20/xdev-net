@@ -21,7 +21,7 @@ tcp_server::~tcp_server() {
     _handlers.clear();
 }
 
-thread_stopper tcp_server::start_listening(const address& address, int max_conn) {
+thread_guard tcp_server::start_listening(const address& address, int max_conn) {
     bind(address);
     return listen([this](socket&& socket, net::address&& addr) {
         int fd = socket.fd();

@@ -30,18 +30,16 @@ struct test_connection_manager: net::abstract_tcp_client_handler {
         _on_receive(msg, _address);
     }
     void start() override {
-        _receive_stopper = _client.start_receiver([this](const std::string& data, const net::address& /*from*/) mutable {
+        _receive_guard = std::move(_client.start_receiver([this](const std::string& data, const net::address& /*from*/) mutable {
             message_received(data);
-        });
+        }));
     }
     void stop() override {
-        if (_receive_stopper)
-            _receive_stopper();
-        _receive_stopper = nullptr;
+        _receive_guard();
     }
 private:
     std::function<void(void)> _delete_notify;
-    net::thread_stopper _receive_stopper;
+    net::thread_guard _receive_guard;
     std::function<void(std::string, net::address)> _on_receive;
     net::tcp_client _client;
     net::address _address;

@@ -47,7 +47,7 @@ struct tcp_server: socket
 
     tcp_server(client_handler_creator);
     ~tcp_server() override;
-    [[nodiscard]] thread_stopper start_listening(const address& address, int max_conn = 100);
+    [[nodiscard]] thread_guard start_listening(const address& address, int max_conn = 100);
     using on_delete = std::function<void()>;
 private:
     using socket::bind;
