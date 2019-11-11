@@ -1,8 +1,10 @@
 #include <net/error.hpp>
 #include <net/address.hpp>
 
+#ifndef _WIN32
 #include <netdb.h>
 #include <arpa/inet.h>
+#endif
 
 using namespace net;
 

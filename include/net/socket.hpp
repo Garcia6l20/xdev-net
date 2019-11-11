@@ -9,6 +9,7 @@
 #include <atomic>
 #include <future>
 #include <iostream>
+#include <optional>
 
 namespace net {
 
@@ -53,6 +54,14 @@ private:
     std::shared_ptr<std::atomic_bool> _running;
 };
 
+inline auto _socket_error() {
+#ifdef _WIN32
+	return WSAGetLastError();
+#else
+	return errno;
+#endif
+}
+
 struct socket
 {
     enum type {
@@ -70,7 +79,7 @@ struct socket
     socket(int fd);
 
     socket(const socket&) = delete;
-    socket(socket&& other):
+    socket(socket&& other) noexcept:
         _fd(other._fd) {
         other._fd = 0;
     }
@@ -151,18 +160,18 @@ struct socket
             to_tv.tv_usec = 25000;
             fd_set read_set;
             if (::listen(_fd, max_conn) != 0)
-                throw error(errno);
+                throw error(_socket_error());
             while (*running) {
                 FD_ZERO(&read_set);
                 FD_SET(_fd, &read_set);
                 int res = ::select(FD_SETSIZE, &read_set, nullptr, nullptr, &to_tv);
                 if (res < 0)
-                    throw error(errno);
+                    throw error(_socket_error());
                 else if (res == 0)
                     continue;
                 int conn_fd = ::accept(_fd, &peer_add, &peer_add_sz);
                 if (conn_fd < 0)
-                    throw error(errno);
+                    throw error(_socket_error());
                 f(socket{conn_fd}, address{&peer_add});
             }
         }), running};

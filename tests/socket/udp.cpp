@@ -11,7 +11,21 @@
 using namespace std::literals::string_literals;
 using namespace std::literals::chrono_literals;
 
-TEST(UDP, TxRxSequencial) {
+struct UdpTest: testing::Test {
+protected:
+	void SetUp() override;
+	void TearDown() override;
+};
+
+void UdpTest::SetUp() {
+	net::initialize();
+}
+
+void UdpTest::TearDown() {
+	net::cleanup();
+}
+
+TEST_F(UdpTest, TxRxSequencial) {
     net::udp_socket rx{};
     rx.bind({"127.0.0.1", 4242});
 
@@ -24,7 +38,7 @@ TEST(UDP, TxRxSequencial) {
     std::cout << from->ip4_address() << " sent: " << buffer << std::endl;
 }
 
-TEST(UDP, TxRxCallback) {
+TEST_F(UdpTest, TxRxCallback) {
     net::udp_socket rx{};
     rx.bind({"127.0.0.1", 4242});
     using ResutlT = std::tuple<std::string, net::address>;
@@ -49,7 +63,7 @@ TEST(UDP, TxRxCallback) {
     std::cout << from.ip4_address() << " sent: " << buffer << std::endl;
 }
 
-TEST(UDP, TxRxFuture) {
+TEST_F(UdpTest, TxRxFuture) {
     net::udp_socket rx{};
     rx.bind({"127.0.0.1", 4242});
     auto fut = rx.receive<std::string>(500ms);

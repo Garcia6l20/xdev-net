@@ -47,7 +47,27 @@ private:
     net::address _address;
 };
 
-TEST(TCP, TxRxSequencial) {
+struct TcpTest : testing::Test {
+protected:
+	void SetUp() override;
+	void TearDown() override;
+};
+
+void TcpTest::SetUp() {
+	net::initialize();
+	// Initialize Winsock
+	WSADATA wsaData;
+	if (int res = WSAStartup(MAKEWORD(2, 2), &wsaData); res) {
+		throw std::string("WSAStartup failed: " + std::to_string(res));
+	}
+}
+
+void TcpTest::TearDown() {
+	WSACleanup();
+	net::cleanup();
+}
+
+TEST_F(TcpTest, TxRxSequencial) {
 
     std::promise<std::tuple<std::string, net::address>> promise;
     auto fut = promise.get_future();

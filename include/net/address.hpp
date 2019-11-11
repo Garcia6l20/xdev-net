@@ -5,7 +5,9 @@
 
 #include <string>
 
+#ifndef _WIN32
 #include <netinet/in.h>
+#endif
 
 namespace net {
 struct address {
