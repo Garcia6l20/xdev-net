@@ -13,7 +13,7 @@ namespace net {
 
 #include <map>
 
-namespace net {
+namespace xdev::net {
 
 struct tcp_client: socket
 {
@@ -58,4 +58,4 @@ private:
     bool _cleaning = false;
 };
 
-}  // namespace net
+}  // namespace xdev::net

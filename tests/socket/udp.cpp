@@ -6,24 +6,14 @@
 #include <thread>
 #include <future>
 #include <chrono>
-#include <cassert>
+
+#include <net-test.hpp>
 
 using namespace std::literals::string_literals;
 using namespace std::literals::chrono_literals;
+using namespace xdev;
 
-struct UdpTest: testing::Test {
-protected:
-	void SetUp() override;
-	void TearDown() override;
-};
-
-void UdpTest::SetUp() {
-	net::initialize();
-}
-
-void UdpTest::TearDown() {
-	net::cleanup();
-}
+struct UdpTest : testing::NetTest {};
 
 TEST_F(UdpTest, TxRxSequencial) {
     net::udp_socket rx{};

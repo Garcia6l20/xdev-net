@@ -14,6 +14,7 @@ project(net)
 add_library(${PROJECT_NAME} STATIC
     include/net/net.hpp
     include/net/unique_function.hpp
+    include/net/thread_guard.hpp
     include/net/error.hpp
     include/net/address.hpp
     include/net/socket.hpp

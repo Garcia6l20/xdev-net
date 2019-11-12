@@ -12,7 +12,7 @@
 #include <WS2tcpip.h>
 #endif
 
-using namespace net;
+using namespace xdev::net;
 
 socket::socket(family domain, type type, protocol protocol) {
     _fd = ::socket(domain, type, protocol);

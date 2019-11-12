@@ -3,7 +3,7 @@
 #include <string>
 #include <stdexcept>
 
-namespace net {
+namespace xdev::net {
 
 void initialize() {
 #ifdef _WIN32

@@ -1,17 +1,16 @@
 #pragma once
 
+#include <net/thread_guard.hpp>
 #include <net/address.hpp>
 
 #include <functional>
-#include <thread>
 #include <type_traits>
 #include <chrono>
-#include <atomic>
 #include <future>
 #include <iostream>
 #include <optional>
 
-namespace net {
+namespace xdev::net {
 
 struct socket;
 
@@ -30,41 +29,6 @@ concept SocketAcceptor = requires(T a) {
 #define DataContainer typename
 #define SocketAcceptor typename
 #endif
-
-struct thread_guard {
-    thread_guard() = default;
-    thread_guard(std::thread&& thread, std::shared_ptr<std::atomic_bool> running):
-        _thread(std::move(thread)),
-        _running(running){}
-	thread_guard(const thread_guard&) = delete;
-	thread_guard& operator=(const thread_guard&) = delete;
-	thread_guard(thread_guard&& other) noexcept:
-		_running(std::move(other._running)),
-		_thread(std::move(other._thread)) {
-	}
-	thread_guard& operator=(thread_guard&& other) noexcept {
-		_running = std::move(other._running);
-		_thread = std::move(other._thread);
-		return *this;
-	}
-	~thread_guard() {
-		(*this)();
-	}
-    void operator()() {
-        if (!*this)
-            return;
-        *_running = false;
-        _thread.join();
-		_running.reset();
-		_thread = std::thread();
-    }
-    operator bool() {
-        return _running && _thread.joinable();
-    }
-private:
-    std::thread _thread;
-    std::shared_ptr<std::atomic_bool> _running;
-};
 
 inline auto _socket_error() {
 #ifdef _WIN32
@@ -197,4 +161,4 @@ private:
     int _fd;
 };
 
-}  // namespace net
+}  // namespace xdev::net

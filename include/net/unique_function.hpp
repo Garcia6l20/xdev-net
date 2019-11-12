@@ -2,7 +2,7 @@
 
 #include <functional>
 
-namespace net {
+namespace xdev {
 
 /**
  * Move only function type
@@ -65,4 +65,4 @@ public:
     using base::operator();
 };
 
-}  // namespace net
+}  // namespace xdev

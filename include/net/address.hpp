@@ -9,7 +9,7 @@
 #include <netinet/in.h>
 #endif
 
-namespace net {
+namespace xdev::net {
 struct address {
     address() = default;
     address(const address& other):
@@ -42,4 +42,4 @@ private:
     } _address;
     uint16_t _port;
 };
-}  // net
+}  // namespace xdev::net

@@ -2,7 +2,7 @@
 
 #include <string.h>
 
-using namespace net;
+using namespace xdev::net;
 
 static std::string get_strerror(int err) {
     return strerror(err);

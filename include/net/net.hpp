@@ -15,7 +15,7 @@
 # endif
 #endif
 
-namespace net {
+namespace xdev::net {
 
 	void initialize();
 	void cleanup();
@@ -25,4 +25,4 @@ enum family {
     inet = AF_INET,
 };
 
-}  // namespace net
+}  // namespace xdev::net

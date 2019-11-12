@@ -2,11 +2,11 @@
 
 #include <net/socket.hpp>
 
-namespace net {
+namespace xdev::net {
 
 struct udp_socket: socket
 {
     udp_socket();
 };
 
-}  // namespace net
+}  // namespace xdev::net

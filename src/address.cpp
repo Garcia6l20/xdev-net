@@ -6,7 +6,7 @@
 #include <arpa/inet.h>
 #endif
 
-using namespace net;
+using namespace xdev::net;
 
 address::address(const std::string& hostname, uint16_t port, family family):
     _family(family),

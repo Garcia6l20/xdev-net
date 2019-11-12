@@ -7,6 +7,7 @@ FetchContent_Declare(googletest
 FetchContent_MakeAvailable(googletest)
 
 link_libraries(${PROJECT_NAME} gtest gtest_main gmock)
+include_directories(${CMAKE_CURRENT_LIST_DIR})
 
 project(${PROJECT_NAME}-test)
 

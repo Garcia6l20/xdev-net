@@ -1,6 +1,6 @@
 #include <net/tcp.hpp>
 
-#include <gtest/gtest.h>
+#include <net-test.hpp>
 
 #include <iostream>
 #include <thread>
@@ -10,6 +10,7 @@
 
 using namespace std::literals::string_literals;
 using namespace std::literals::chrono_literals;
+using namespace xdev;
 
 struct test_connection_manager: net::abstract_tcp_client_handler {
     test_connection_manager(net::tcp_client&& client, net::address&& address, std::function<void(void)> delete_notify,
@@ -39,31 +40,13 @@ struct test_connection_manager: net::abstract_tcp_client_handler {
     }
 private:
     std::function<void(void)> _delete_notify;
-    net::thread_guard _receive_guard;
+    xdev::thread_guard _receive_guard;
     std::function<void(std::string, net::address)> _on_receive;
     net::tcp_client _client;
     net::address _address;
 };
 
-struct TcpTest : testing::Test {
-protected:
-	void SetUp() override;
-	void TearDown() override;
-};
-
-void TcpTest::SetUp() {
-	net::initialize();
-	// Initialize Winsock
-	WSADATA wsaData;
-	if (int res = WSAStartup(MAKEWORD(2, 2), &wsaData); res) {
-		throw std::string("WSAStartup failed: " + std::to_string(res));
-	}
-}
-
-void TcpTest::TearDown() {
-	WSACleanup();
-	net::cleanup();
-}
+struct TcpTest : testing::NetTest {};
 
 TEST_F(TcpTest, TxRxSequencial) {
 
