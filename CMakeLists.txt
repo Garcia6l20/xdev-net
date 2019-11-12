@@ -11,6 +11,16 @@ else()
 endif()
 
 project(net)
+
+include(FetchContent)
+
+FetchContent_Declare(nodejs-http-parser
+    GIT_REPOSITORY https://github.com/nodejs/http-parser.git
+    GIT_TAG v2.9.2
+	PATCH_COMMAND git apply ${PROJECT_SOURCE_DIR}/patches/nodejs-http-parser/0001-add-cmakelists.patch
+)
+FetchContent_MakeAvailable(nodejs-http-parser)
+
 add_library(${PROJECT_NAME} STATIC
     include/net/net.hpp
     include/net/unique_function.hpp
@@ -20,6 +30,7 @@ add_library(${PROJECT_NAME} STATIC
     include/net/socket.hpp
     include/net/udp.hpp
     include/net/tcp.hpp
+    include/net/http_server.hpp
 
     src/net.cpp
     src/error.cpp
@@ -27,8 +38,10 @@ add_library(${PROJECT_NAME} STATIC
     src/socket.cpp
     src/udp.cpp
     src/tcp.cpp
+    src/http_server.cpp
 )
 target_include_directories(${PROJECT_NAME} PUBLIC include)
+target_link_libraries(${PROJECT_NAME} PUBLIC nodejs-http-parser)
 
 if(WIN32)
   target_link_libraries(${PROJECT_NAME} PUBLIC wsock32 ws2_32)

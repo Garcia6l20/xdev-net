@@ -4,6 +4,7 @@
 #include <net/error.hpp>
 
 #include <string>
+#include <ostream>
 
 #ifndef _WIN32
 #include <netinet/in.h>

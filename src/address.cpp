@@ -6,6 +6,8 @@
 #ifndef _WIN32
 #include <netdb.h>
 #include <arpa/inet.h>
+#else
+using sa_family_t = uint16_t;
 #endif
 
 using namespace xdev::net;
@@ -13,7 +15,7 @@ using namespace xdev::net;
 address::address(const std::string& hostname, uint16_t port, enum family family)
 {
     hostent *he;
-    if ((he = gethostbyname2(hostname.c_str(), family)) == nullptr)
+    if ((he = gethostbyname(hostname.c_str())) == nullptr)
         throw error(errno);
 
     in_addr **addr_list = reinterpret_cast<in_addr **>(he->h_addr_list);

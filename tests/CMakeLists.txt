@@ -17,4 +17,4 @@ if (VALGRIND_EXE)
 endif()
 
 add_subdirectory(socket)
-
+add_subdirectory(http)

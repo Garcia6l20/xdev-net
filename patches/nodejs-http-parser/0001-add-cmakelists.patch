@@ -1,0 +1,15 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+new file mode 100644
+index 0000000..2763fa2
+--- /dev/null
++++ b/CMakeLists.txt
+@@ -0,0 +1,9 @@
++cmake_minimum_required(VERSION 3.14)
++
++project(nodejs-http-parser)
++
++add_library(${PROJECT_NAME} STATIC
++    http_parser.h
++    http_parser.c
++)
++target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR})
