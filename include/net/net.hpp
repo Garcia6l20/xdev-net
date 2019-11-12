@@ -23,6 +23,7 @@ namespace xdev::net {
 enum family {
     none = 0,
     inet = AF_INET,
+    inet6 = AF_INET6,
 };
 
 }  // namespace xdev::net

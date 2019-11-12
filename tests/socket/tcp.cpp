@@ -60,14 +60,12 @@ TEST_F(TcpTest, SimpleConnectionManager) {
 
     auto stopper = srv.start_listening({"localhost", 4242});
 
-    std::this_thread::sleep_for(100ms);
-
     net::tcp_client clt{};
     clt.connect({"localhost", 4242});
     clt.send("hello"s, {"localhost", 4242});
 
     auto [received, from] = fut.get();
-    std::cout << from.ip4_address() << " sent: " << received << std::endl;
+    std::cout << from << " sent: " << received << std::endl;
     ASSERT_EQ("hello", received);
 }
 
@@ -90,13 +88,11 @@ TEST_F(TcpTest, CustomConnectionManager) {
 
     auto stopper = srv.start_listening({"localhost", 4242});
 
-    std::this_thread::sleep_for(100ms);
-
     net::tcp_client clt{};
     clt.connect({"localhost", 4242});
     clt.send("hello"s, {"localhost", 4242});
 
     auto [received, from] = fut.get();
-    std::cout << from.ip4_address() << " sent: " << received << std::endl;
+    std::cout << from << " sent: " << received << std::endl;
     ASSERT_EQ("hello", received);
 }

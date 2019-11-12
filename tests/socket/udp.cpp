@@ -25,7 +25,8 @@ TEST_F(UdpTest, TxRxSequencial) {
     auto from = rx.receive(buffer);
     EXPECT_TRUE(from);
     EXPECT_EQ(buffer, "hello");
-    std::cout << from->ip4_address() << " sent: " << buffer << std::endl;
+
+    std::cout << *from << " sent: " << buffer << std::endl;
 }
 
 TEST_F(UdpTest, TxRxCallback) {
@@ -50,7 +51,7 @@ TEST_F(UdpTest, TxRxCallback) {
 
     EXPECT_EQ(buffer, "hello");
 
-    std::cout << from.ip4_address() << " sent: " << buffer << std::endl;
+    std::cout << from << " sent: " << buffer << std::endl;
 }
 
 TEST_F(UdpTest, TxRxFuture) {
@@ -67,5 +68,5 @@ TEST_F(UdpTest, TxRxFuture) {
 
     EXPECT_EQ(buffer, "hello");
 
-    std::cout << from.ip4_address() << " sent: " << buffer << std::endl;
+    std::cout << from << " sent: " << buffer << std::endl;
 }

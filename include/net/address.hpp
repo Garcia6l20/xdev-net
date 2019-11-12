@@ -13,13 +13,9 @@ namespace xdev::net {
 struct address {
     address() = default;
     address(const address& other):
-        _family(other._family),
-        _address(other._address),
-        _port(other._port) {}
+        _addr(other._addr) {}
     address& operator=(const address& other) {
-        _family = other._family;
-        _address = other._address;
-        _port = other._port;
+        _addr = other._addr;
         return *this;
     }
     address(const struct sockaddr* const addr);
@@ -29,17 +25,28 @@ struct address {
 
     operator struct sockaddr() const;
 
+    uint16_t port() const;
+
     uint32_t ip4_address() const {
-        if (_family != family::inet)
+        if (_addr.sa_family != family::inet)
             throw error("not an ipv4 address");
-        return _address.ip4;
+        return reinterpret_cast<const sockaddr_in*>(&_addr)->sin_addr.s_addr;
+    }
+
+    std::string to_string() const;
+
+    friend std::ostream& operator<< (std::ostream& stream, const address& address) {
+        stream << address.to_string();
+        return stream;
     }
 
 private:
-    family _family;
-    union {
-        uint32_t ip4;
-    } _address;
-    uint16_t _port;
+    sockaddr _addr;
 };
 }  // namespace xdev::net
+
+namespace std {
+inline std::string to_string(const xdev::net::address& add) {
+    return add.to_string();
+}
+}
