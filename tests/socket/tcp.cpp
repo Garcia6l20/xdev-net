@@ -52,13 +52,18 @@ TEST_F(TcpTest, SimpleConnectionManager) {
     std::promise<std::tuple<std::string, net::address>> promise;
     auto fut = promise.get_future();
 
-    auto on_data = [&promise](const std::string& data, const net::address& from) {
+    auto on_data = [&promise](const std::string& data, const net::address& from, const auto& send) {
         promise.set_value({data, from});
+        send({data.begin(), data.end()});
     };
 
     net::tcp_server srv{on_data};
 
-    auto stopper = srv.start_listening({"localhost", 4242});
+    net::address srv_addr{"localhost", 4242};
+
+    auto stopper = srv.start_listening(srv_addr);
+
+    std::this_thread::sleep_for(10ms);
 
     net::tcp_client clt{};
     clt.connect({"localhost", 4242});
@@ -67,6 +72,44 @@ TEST_F(TcpTest, SimpleConnectionManager) {
     auto [received, from] = fut.get();
     std::cout << from << " sent: " << received << std::endl;
     ASSERT_EQ("hello", received);
+
+    std::this_thread::sleep_for(10ms);
+
+    std::string back;
+    auto from_srv = clt.receive(back);
+    std::cout << srv_addr << " responded: " << back << std::endl;
+    ASSERT_TRUE(from_srv);
+    ASSERT_EQ(received, back);
+    stopper();
+}
+
+TEST_F(TcpTest, SimpleConnectionManagerFutureReceiveBack) {
+    std::promise<std::tuple<std::string, net::address>> promise;
+    auto fut = promise.get_future();
+
+    auto on_data = [&promise](const std::string& data, const net::address& from, const auto& send) {
+        promise.set_value({data, from});
+        send({data.begin(), data.end()});
+    };
+
+    net::tcp_server srv{on_data};
+
+    auto stopper = srv.start_listening({"localhost", 4242});
+
+    std::this_thread::sleep_for(10ms);
+
+    net::tcp_client clt{};
+    clt.connect({"localhost", 4242});
+    clt.send("hello"s, {"localhost", 4242});
+
+    auto [received, from] = fut.get();
+    std::cout << from << " sent: " << received << std::endl;
+    ASSERT_EQ("hello", received);
+
+    auto clt_fut = clt.receive<std::string>(10ms);
+    auto received_back = clt_fut.get();
+    ASSERT_EQ(received, std::get<0>(received_back));
+    stopper();
 }
 
 TEST_F(TcpTest, CustomConnectionManager) {
@@ -95,4 +138,5 @@ TEST_F(TcpTest, CustomConnectionManager) {
     auto [received, from] = fut.get();
     std::cout << from << " sent: " << received << std::endl;
     ASSERT_EQ("hello", received);
+    stopper();
 }

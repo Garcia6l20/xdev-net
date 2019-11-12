@@ -18,7 +18,7 @@ struct address {
         _addr = other._addr;
         return *this;
     }
-    address(const struct sockaddr* const addr);
+    address(const sockaddr_storage& addr);
     address(const std::string& hostname, uint16_t port, family family = inet);
 
     static address any() { return {"0.0.0.0", 0}; }
@@ -27,8 +27,10 @@ struct address {
 
     uint16_t port() const;
 
+    enum family family() const;
+
     uint32_t ip4_address() const {
-        if (_addr.sa_family != family::inet)
+        if (raw().sa_family != family::inet)
             throw error("not an ipv4 address");
         return reinterpret_cast<const sockaddr_in*>(&_addr)->sin_addr.s_addr;
     }
@@ -40,8 +42,12 @@ struct address {
         return stream;
     }
 
+    bool operator==(const address& other) const;
+
 private:
-    sockaddr _addr;
+    const sockaddr& raw() const { return *reinterpret_cast<const sockaddr*>(&_addr); }
+    sockaddr& raw() { return *reinterpret_cast<sockaddr*>(&_addr); }
+    sockaddr_storage _addr;
 };
 }  // namespace xdev::net
 

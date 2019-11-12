@@ -23,7 +23,7 @@ concept DataContainer = requires(T a) {
 };
 template <typename T>
 concept SocketAcceptor = requires(T a) {
-    { a(net::socket(-1), net::address(nullptr)) } -> void;
+    { a(net::socket(-1), net::address(sockaddr_storage{})) } -> void;
 };
 #else
 #define DataContainer typename
@@ -129,7 +129,7 @@ struct socket
     listen(AcceptFunctorT&& functor, int max_conn = 100) {
         auto running = std::make_shared<std::atomic<bool>>(true);
         return thread_guard{std::thread([this, f = std::forward<AcceptFunctorT>(functor), running, max_conn]() mutable {
-            struct sockaddr peer_add;
+            sockaddr_storage peer_add;
             socklen_t peer_add_sz = sizeof(peer_add);
             struct timeval to_tv;
             to_tv.tv_sec = 0;
@@ -145,10 +145,10 @@ struct socket
                     throw error(_socket_error());
                 else if (res == 0)
                     continue;
-                int conn_fd = ::accept(_fd, &peer_add, &peer_add_sz);
+                int conn_fd = ::accept(_fd, reinterpret_cast<sockaddr*>(&peer_add), &peer_add_sz);
                 if (conn_fd < 0)
                     throw error(_socket_error());
-                f(socket{conn_fd}, address{&peer_add});
+                f(socket{conn_fd}, address{peer_add});
             }
         }), running};
     }

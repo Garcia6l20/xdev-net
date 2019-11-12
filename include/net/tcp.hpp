@@ -37,7 +37,7 @@ concept ConnectionHandler = requires(T a) {
 };
 template <typename T>
 concept SimpleReceiveFunctor = requires(T a) {
-    { a(std::string{}, net::address{}) } -> void;
+    { a(std::string{}, net::address{}, std::function<void(const std::vector<char>&)> {}) } -> void;
 };
 #else
 #define ConnectionHandler typename
@@ -46,8 +46,10 @@ concept SimpleReceiveFunctor = requires(T a) {
 
 
 struct simple_connection_manager {
+    using on_receive_func = std::function<void(std::string, net::address, std::function<void(const std::vector<char>&)>)>;
+
     simple_connection_manager(net::tcp_client&& client, net::address&& address, std::function<void(void)> delete_notify,
-                            std::function<void(std::string, net::address)> on_receive):
+                            on_receive_func on_receive):
         _delete_notify(delete_notify),
         _on_receive(on_receive),
         _client(std::move(client)),
@@ -61,7 +63,9 @@ struct simple_connection_manager {
         _delete_notify = nullptr;
     }
     void message_received(const std::string& msg) {
-        _on_receive(msg, _address);
+        _on_receive(msg, _address, [this](const std::vector<char>& data) {
+            send(data);
+        });
     }
     void start() {
         _receive_guard = _client.start_receiver([this](const std::string& data, const net::address& /*from*/) mutable {
@@ -71,8 +75,13 @@ struct simple_connection_manager {
     void stop() {
         _receive_guard();
     }
-    using on_receive_func = std::function<void(std::string, net::address)>;
-private:
+
+    template<DataContainer DataContainerT>
+    void send(const DataContainerT& data) {
+        _client.send(data, _address);
+    }
+
+protected:
     std::function<void(void)> _delete_notify;
     xdev::thread_guard _receive_guard;
     on_receive_func _on_receive;
@@ -114,10 +123,10 @@ template <SimpleReceiveFunctor OnReceiveT>
 tcp_server<ConnectionHandlerT>::tcp_server(OnReceiveT on_receive_func):
     socket(family::inet, socket::stream),
     _connection_create([on_receive_func](net::socket&& sock, net::address&& from, auto stop_notify) {
-        auto client_manager = std::make_shared<simple_connection_manager>(std::forward<net::socket>(sock),
-                                                                        std::forward<net::address>(from),
-                                                                        stop_notify,
-                                                                        on_receive_func);
+        auto client_manager = std::make_shared<ConnectionHandlerT>(std::forward<net::socket>(sock),
+                                                                   std::forward<net::address>(from),
+                                                                   stop_notify,
+                                                                   on_receive_func);
         return client_manager;
     }) {
 }

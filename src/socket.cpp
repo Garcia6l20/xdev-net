@@ -37,7 +37,7 @@ socket::~socket() {
 
 void socket::bind(const address& address) {
     struct sockaddr addr = address;
-    if (::bind(_fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) < 0)
+    if (::bind(_fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) != 0)
         throw error(_socket_error());
 }
 
@@ -73,17 +73,17 @@ size_t socket::bytes_available(const clock::duration& timeout) const {
 }
 
 address socket::receive(void* buffer, size_t& buffer_sz) {
-    struct sockaddr from {0, {0}};
-    socklen_t from_len = sizeof(struct sockaddr);
+    sockaddr_storage from;
+    socklen_t from_len = sizeof(from);
     if (buffer_sz == 0) {
         throw error("buffer size is 0");
     } else {
-        auto n = ::recvfrom(_fd, static_cast<char*>(buffer), buffer_sz, /*MSG_WAITALL*/ 0, &from, &from_len);
+        auto n = ::recvfrom(_fd, static_cast<char*>(buffer), buffer_sz, /*MSG_WAITALL*/ 0, reinterpret_cast<sockaddr*>(&from), &from_len);
         if (n < 0)
             throw error(_socket_error());
         buffer_sz = static_cast<size_t>(n);
-        if (from_len && from.sa_family != family::none)
-            return address(&from);
+        if (from_len && from.ss_family != family::none)
+            return address(from);
         else return address();
     }
 }

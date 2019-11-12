@@ -33,7 +33,7 @@ struct thread_guard {
         _thread = std::thread();
     }
     operator bool() {
-        return _running && _thread.joinable();
+        return _running && _thread.joinable() && *_running;
     }
 private:
     std::thread _thread;
