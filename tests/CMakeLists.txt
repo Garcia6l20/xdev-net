@@ -11,6 +11,10 @@ include_directories(${CMAKE_CURRENT_LIST_DIR})
 
 project(${PROJECT_NAME}-test)
 
-enable_testing()
+find_program(VALGRIND_EXE valgrind)
+if (VALGRIND_EXE)
+    set(CTEST_MEMORYCHECK_COMMAND "${VALGRIND_EXE}")
+endif()
 
 add_subdirectory(socket)
+
