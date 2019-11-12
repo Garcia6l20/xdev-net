@@ -35,17 +35,62 @@ concept ConnectionHandler = requires(T a) {
     { a.start() } -> void;
     { a.stop() } -> void;
 };
+template <typename T>
+concept SimpleReceiveFunctor = requires(T a) {
+    { a(std::string{}, net::address{}) } -> void;
+};
 #else
 #define ConnectionHandler typename
+#define SimpleReceiveFunctor typename
 #endif
 
-template <ConnectionHandler ConnectionHandlerT>
+
+struct simple_connection_manager {
+    simple_connection_manager(net::tcp_client&& client, net::address&& address, std::function<void(void)> delete_notify,
+                            std::function<void(std::string, net::address)> on_receive):
+        _delete_notify(delete_notify),
+        _on_receive(on_receive),
+        _client(std::move(client)),
+        _address(std::move(address)) {
+        std::cout << "client connected" << std::endl;
+    }
+    ~simple_connection_manager() {
+        stop();
+        if (_delete_notify)
+            _delete_notify();
+        _delete_notify = nullptr;
+    }
+    void message_received(const std::string& msg) {
+        _on_receive(msg, _address);
+    }
+    void start() {
+        _receive_guard = _client.start_receiver([this](const std::string& data, const net::address& /*from*/) mutable {
+            message_received(data);
+        });
+    }
+    void stop() {
+        _receive_guard();
+    }
+    using on_receive_func = std::function<void(std::string, net::address)>;
+private:
+    std::function<void(void)> _delete_notify;
+    xdev::thread_guard _receive_guard;
+    on_receive_func _on_receive;
+    net::tcp_client _client;
+    net::address _address;
+};
+
+template <ConnectionHandler ConnectionHandlerT = simple_connection_manager>
 struct tcp_server: socket
 {
     using client_handler_creator = std::function<std::shared_ptr<ConnectionHandlerT>(tcp_client&&, address&&, std::function<void()>)>;
     using stop_notify = std::function<void()>;
 
     tcp_server(client_handler_creator);
+
+    template <SimpleReceiveFunctor OnReceiveT>
+    tcp_server(OnReceiveT on_receive);
+
     ~tcp_server() override;
     [[nodiscard]] thread_guard start_listening(const address& address, int max_conn = 100);
     using on_delete = std::function<void()>;
@@ -62,6 +107,19 @@ template <ConnectionHandler ConnectionHandlerT>
 tcp_server<ConnectionHandlerT>::tcp_server(client_handler_creator connection_create):
     socket(family::inet, socket::stream),
     _connection_create(connection_create) {
+}
+
+template <ConnectionHandler ConnectionHandlerT>
+template <SimpleReceiveFunctor OnReceiveT>
+tcp_server<ConnectionHandlerT>::tcp_server(OnReceiveT on_receive_func):
+    socket(family::inet, socket::stream),
+    _connection_create([on_receive_func](net::socket&& sock, net::address&& from, auto stop_notify) {
+        auto client_manager = std::make_shared<simple_connection_manager>(std::forward<net::socket>(sock),
+                                                                        std::forward<net::address>(from),
+                                                                        stop_notify,
+                                                                        on_receive_func);
+        return client_manager;
+    }) {
 }
 
 template <ConnectionHandler ConnectionHandlerT>
