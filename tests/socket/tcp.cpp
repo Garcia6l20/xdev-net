@@ -12,7 +12,7 @@ using namespace std::literals::string_literals;
 using namespace std::literals::chrono_literals;
 using namespace xdev;
 
-struct test_connection_manager: net::abstract_tcp_client_handler {
+struct test_connection_manager {
     test_connection_manager(net::tcp_client&& client, net::address&& address, std::function<void(void)> delete_notify,
                             std::function<void(std::string, net::address)> on_receive):
         _delete_notify(delete_notify),
@@ -21,7 +21,7 @@ struct test_connection_manager: net::abstract_tcp_client_handler {
         _address(std::move(address)) {
         std::cout << "client connected" << std::endl;
     }
-    ~test_connection_manager() override {
+    ~test_connection_manager() {
         stop();
         if (_delete_notify)
             _delete_notify();
@@ -30,12 +30,12 @@ struct test_connection_manager: net::abstract_tcp_client_handler {
     void message_received(const std::string& msg) {
         _on_receive(msg, _address);
     }
-    void start() override {
-        _receive_guard = std::move(_client.start_receiver([this](const std::string& data, const net::address& /*from*/) mutable {
+    void start() {
+        _receive_guard = _client.start_receiver([this](const std::string& data, const net::address& /*from*/) mutable {
             message_received(data);
-        }));
+        });
     }
-    void stop() override {
+    void stop() {
         _receive_guard();
     }
 private:
@@ -57,7 +57,7 @@ TEST_F(TcpTest, TxRxSequencial) {
         promise.set_value({data, from});
     };
 
-    net::tcp_server srv{[on_data](net::socket&& sock, net::address&& from, net::tcp_server::stop_notify stop_notify) {
+    net::tcp_server<test_connection_manager> srv{[on_data](net::socket&& sock, net::address&& from, auto stop_notify) {
         auto client_manager = std::make_shared<test_connection_manager>(std::forward<net::socket>(sock),
                                                                         std::forward<net::address>(from),
                                                                         stop_notify,
