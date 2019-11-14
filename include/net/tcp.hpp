@@ -68,12 +68,12 @@ struct simple_connection_manager {
         });
     }
     void start() {
-        _receive_guard = _client.start_receiver([this](const std::string& data, const net::address& /*from*/) mutable {
+        _receive_thread = _client.start_receiver([this](const std::string& data, const net::address& /*from*/) mutable {
             message_received(data);
         });
     }
     void stop() {
-        _receive_guard();
+        _receive_thread.request_stop();
     }
 
     template<DataContainer DataContainerT>
@@ -83,7 +83,7 @@ struct simple_connection_manager {
 
 protected:
     std::function<void(void)> _delete_notify;
-    xdev::thread_guard _receive_guard;
+    std::jthread _receive_thread;
     on_receive_func _on_receive;
     net::tcp_client _client;
     net::address _address;
@@ -101,7 +101,7 @@ struct tcp_server: socket
     tcp_server(OnReceiveT on_receive);
 
     ~tcp_server() override;
-    [[nodiscard]] thread_guard start_listening(const address& address, int max_conn = 100);
+    [[nodiscard]] std::jthread start_listening(const address& address, int max_conn = 100);
     using on_delete = std::function<void()>;
 private:
     using socket::bind;
@@ -140,7 +140,7 @@ tcp_server<ConnectionHandlerT>::~tcp_server() {
 }
 
 template <ConnectionHandler ConnectionHandlerT>
-xdev::thread_guard tcp_server<ConnectionHandlerT>::start_listening(const address& address, int max_conn) {
+std::jthread tcp_server<ConnectionHandlerT>::start_listening(const address& address, int max_conn) {
     bind(address);
     return listen([this](socket&& socket, net::address&& addr) {
         int fd = socket.fd();

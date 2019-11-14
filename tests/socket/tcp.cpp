@@ -31,16 +31,16 @@ struct test_connection_manager {
         _on_receive(msg, _address);
     }
     void start() {
-        _receive_guard = _client.start_receiver([this](const std::string& data, const net::address& /*from*/) mutable {
+        _receive_thread = _client.start_receiver([this](const std::string& data, const net::address& /*from*/) mutable {
             message_received(data);
         });
     }
     void stop() {
-        _receive_guard();
+        _receive_thread.request_stop();
     }
 private:
     std::function<void(void)> _delete_notify;
-    xdev::thread_guard _receive_guard;
+    std::jthread _receive_thread;
     std::function<void(std::string, net::address)> _on_receive;
     net::tcp_client _client;
     net::address _address;
@@ -61,7 +61,7 @@ TEST_F(TcpTest, SimpleConnectionManager) {
 
     net::address srv_addr{"localhost", 4242};
 
-    auto stopper = srv.start_listening(srv_addr);
+    auto listen_thread = srv.start_listening(srv_addr);
 
     std::this_thread::sleep_for(10ms);
 
@@ -80,7 +80,8 @@ TEST_F(TcpTest, SimpleConnectionManager) {
     std::cout << srv_addr << " responded: " << back << std::endl;
     ASSERT_TRUE(from_srv);
     ASSERT_EQ(received, back);
-    stopper();
+    listen_thread.request_stop();
+    listen_thread.join();
 }
 
 TEST_F(TcpTest, SimpleConnectionManagerFutureReceiveBack) {
@@ -94,7 +95,7 @@ TEST_F(TcpTest, SimpleConnectionManagerFutureReceiveBack) {
 
     net::tcp_server srv{on_data};
 
-    auto stopper = srv.start_listening({"localhost", 4242});
+    auto listen_thread = srv.start_listening({"localhost", 4242});
 
     std::this_thread::sleep_for(10ms);
 
@@ -109,7 +110,8 @@ TEST_F(TcpTest, SimpleConnectionManagerFutureReceiveBack) {
     auto clt_fut = clt.receive<std::string>(10ms);
     auto received_back = clt_fut.get();
     ASSERT_EQ(received, std::get<0>(received_back));
-    stopper();
+    listen_thread.request_stop();
+    listen_thread.join();
 }
 
 TEST_F(TcpTest, CustomConnectionManager) {
@@ -129,7 +131,7 @@ TEST_F(TcpTest, CustomConnectionManager) {
         return client_manager;
     }};
 
-    auto stopper = srv.start_listening({"localhost", 4242});
+    auto listen_thread = srv.start_listening({"localhost", 4242});
 
     net::tcp_client clt{};
     clt.connect({"localhost", 4242});
@@ -138,5 +140,6 @@ TEST_F(TcpTest, CustomConnectionManager) {
     auto [received, from] = fut.get();
     std::cout << from << " sent: " << received << std::endl;
     ASSERT_EQ("hello", received);
-    stopper();
+    listen_thread.request_stop();
+    listen_thread.join();
 }

@@ -20,12 +20,12 @@ socket::socket(family domain, type type, protocol protocol) {
         throw error(_socket_error());
 }
 
-socket::socket(int fd):
+socket::socket(sock_fd_t fd):
     _fd{fd} {
 }
 
 socket::~socket() {
-    int fd = 0;
+    sock_fd_t fd = 0;
     std::swap(fd, _fd);
     if (fd > 0)
 #ifdef _WIN32

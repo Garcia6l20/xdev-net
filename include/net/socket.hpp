@@ -1,6 +1,5 @@
 #pragma once
 
-#include <net/thread_guard.hpp>
 #include <net/address.hpp>
 
 #include <functional>
@@ -9,6 +8,12 @@
 #include <future>
 #include <iostream>
 #include <optional>
+
+#ifdef _HAS_JTHREAD // must wait for c++23
+#include <jthread>
+#else
+#include <jthread.hpp>
+#endif
 
 namespace xdev::net {
 
@@ -40,6 +45,12 @@ inline auto _socket_error() {
 
 struct socket
 {
+#ifdef _WIN32
+	using sock_fd_t = SOCKET;
+#else
+	using sock_fd_t = int;
+#endif
+
     enum type {
         dgram = SOCK_DGRAM,
         stream = SOCK_STREAM,
@@ -52,7 +63,7 @@ struct socket
     using clock = std::chrono::high_resolution_clock;
 
     socket(family family, type type, protocol protocol = none);
-    socket(int fd);
+    socket(sock_fd_t fd);
 
     socket(const socket&) = delete;
     socket(socket&& other) noexcept:
@@ -86,19 +97,18 @@ struct socket
     }
 
     template <typename ReceiverT>
-    [[nodiscard]] thread_guard
+    [[nodiscard]] std::jthread
     start_receiver(ReceiverT&& receiver) {
-        auto running = std::make_shared<std::atomic_bool>(true);
-        return thread_guard{std::thread([this, rx = std::forward<ReceiverT>(receiver), running]() mutable {
+        return std::jthread([this, rx = std::forward<ReceiverT>(receiver)](std::stop_token&&stop) mutable {
             std::vector<char> data;
-            while (*running) {
+            while (!stop.stop_requested()) {
                 auto from = receive(data, std::chrono::milliseconds(25));
                 if (from) {
                     rx({data.data(), data.size()}, from.value());
                     data.clear();
                 }
             }
-        }), running};
+        });
     }
 
     template <DataContainer ContainerT = std::vector<char>>
@@ -125,10 +135,9 @@ struct socket
     }
 
     template <SocketAcceptor AcceptFunctorT>
-    [[nodiscard]] thread_guard
+    [[nodiscard]] std::jthread
     listen(AcceptFunctorT&& functor, int max_conn = 100) {
-        auto running = std::make_shared<std::atomic<bool>>(true);
-        return thread_guard{std::thread([this, f = std::forward<AcceptFunctorT>(functor), running, max_conn]() mutable {
+        return std::jthread([this, f = std::forward<AcceptFunctorT>(functor), max_conn](std::stop_token&& stop) mutable {
             sockaddr_storage peer_add;
             socklen_t peer_add_sz = sizeof(peer_add);
             struct timeval to_tv;
@@ -137,7 +146,7 @@ struct socket
             fd_set read_set;
             if (::listen(_fd, max_conn) != 0)
                 throw error(_socket_error());
-            while (*running) {
+            while (!stop.stop_requested()) {
                 FD_ZERO(&read_set);
                 FD_SET(_fd, &read_set);
                 int res = ::select(FD_SETSIZE, &read_set, nullptr, nullptr, &to_tv);
@@ -145,20 +154,20 @@ struct socket
                     throw error(_socket_error());
                 else if (res == 0)
                     continue;
-                int conn_fd = ::accept(_fd, reinterpret_cast<sockaddr*>(&peer_add), &peer_add_sz);
+                auto conn_fd = ::accept(_fd, reinterpret_cast<sockaddr*>(&peer_add), &peer_add_sz);
                 if (conn_fd < 0)
                     throw error(_socket_error());
                 f(socket{conn_fd}, address{peer_add});
             }
-        }), running};
+        });
     }
 
     void connect(const address& address);
 
-    int fd() const { return _fd; }
+	sock_fd_t fd() const { return _fd; }
 
 private:
-    int _fd;
+	sock_fd_t _fd;
 };
 
 }  // namespace xdev::net

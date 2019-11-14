@@ -36,7 +36,7 @@ TEST_F(UdpTest, TxRxCallback) {
     auto promise = std::make_shared<std::promise<ResutlT>>();
     auto fut = promise->get_future();
 
-    auto stopper = rx.start_receiver([promise](const std::string& data, const net::address& from) mutable {
+    auto receive_thread = rx.start_receiver([promise](const std::string& data, const net::address& from) mutable {
         std::cout << data << std::endl;
         promise->set_value({data, from});
     });
@@ -44,7 +44,7 @@ TEST_F(UdpTest, TxRxCallback) {
     net::udp_socket{}.send("hello"s, {"localhost", 4242});
 
     auto received = fut.get();
-    stopper();
+    receive_thread.request_stop();
 
     auto buffer = std::get<0>(received);
     auto from = std::get<1>(received);

@@ -15,7 +15,7 @@ struct http_connection_handler: simple_connection_manager {
     void start() {
         http_parser_init(&_parser, node::HTTP_REQUEST);
         _parser.data = this;
-        _receive_guard = _client.start_receiver([this](const std::string& data, const net::address& /*from*/) mutable {
+        _receive_thread = _client.start_receiver([this](const std::string& data, const net::address& /*from*/) mutable {
             auto res = http_parser_execute(&_parser, &_parser_settings, data.data(), data.length());
             if (res < data.length()) {
                 throw error("http parser error: " +
