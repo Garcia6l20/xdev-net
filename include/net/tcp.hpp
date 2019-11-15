@@ -37,7 +37,7 @@ concept ConnectionHandler = requires(T a) {
 };
 template <typename T>
 concept SimpleReceiveFunctor = requires(T a) {
-    { a(std::string{}, net::address{}, std::function<void(const std::vector<char>&)> {}) } -> void;
+    { a(buffer{}, net::address{}, std::function<void(const net::buffer&)> {}) } -> void;
 };
 #else
 #define ConnectionHandler typename
@@ -46,7 +46,7 @@ concept SimpleReceiveFunctor = requires(T a) {
 
 
 struct simple_connection_manager {
-    using on_receive_func = std::function<void(std::string, net::address, std::function<void(const std::vector<char>&)>)>;
+    using on_receive_func = std::function<void(net::buffer, net::address, std::function<void(const buffer&)>)>;
 
     simple_connection_manager(net::tcp_client&& client, net::address&& address, std::function<void(void)> delete_notify,
                             on_receive_func on_receive):
@@ -57,18 +57,19 @@ struct simple_connection_manager {
         std::cout << "client connected: " << _address  << std::endl;
     }
     ~simple_connection_manager() {
+        notify_delete();
         stop();
-        if (_delete_notify)
-            _delete_notify();
-        _delete_notify = nullptr;
+        if (_receive_thread.get_id() != std::this_thread::get_id() && _receive_thread.joinable())
+            _receive_thread.join();
+        else _receive_thread.detach();
     }
-    void message_received(const std::string& msg) {
-        _on_receive(msg, _address, [this](const std::vector<char>& data) {
+    void message_received(const net::buffer& msg) {
+        _on_receive(msg, _address, [this](const net::buffer& data) {
             send(data);
         });
     }
     void start() {
-        _receive_thread = _client.start_receiver([this](const std::string& data) mutable {
+        _receive_thread = _client.start_receiver([this](const auto& data) mutable {
             message_received(data);
         }, [this] {
             disconnected();
@@ -79,10 +80,14 @@ struct simple_connection_manager {
     }
     void disconnected() {
         std::cout << "client disconnected: " << _address << std::endl;
-        _receive_thread.detach();
-        auto notify = _delete_notify;
-        _delete_notify = nullptr;
-        notify();
+        notify_delete();
+    }
+
+    void notify_delete() {
+        decltype(_delete_notify) notify;
+        std::swap(notify, _delete_notify);
+        if (notify)
+            notify();
     }
 
     template<DataContainer DataContainerT>
@@ -142,9 +147,9 @@ tcp_server<ConnectionHandlerT>::tcp_server(OnReceiveT on_receive_func):
 
 template <ConnectionHandler ConnectionHandlerT>
 tcp_server<ConnectionHandlerT>::~tcp_server() {
+    _cleaning = true;
     for (auto& [_, h]: _handlers)
         h->stop();
-    _cleaning = true;
     _handlers.clear();
 }
 

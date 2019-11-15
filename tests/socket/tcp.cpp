@@ -14,7 +14,7 @@ using namespace xdev;
 
 struct test_connection_manager {
     test_connection_manager(net::tcp_client&& client, net::address&& address, std::function<void(void)> delete_notify,
-                            std::function<void(std::string, net::address)> on_receive):
+                            std::function<void(net::buffer, net::address)> on_receive):
         _delete_notify(delete_notify),
         _on_receive(on_receive),
         _client(std::move(client)),
@@ -27,11 +27,11 @@ struct test_connection_manager {
             _delete_notify();
         _delete_notify = nullptr;
     }
-    void message_received(const std::string& msg) {
+    void message_received(const net::buffer& msg) {
         _on_receive(msg, _address);
     }
     void start() {
-        _receive_thread = _client.start_receiver([this](const std::string& data, const net::address& /*from*/) mutable {
+        _receive_thread = _client.start_receiver([this](const net::buffer& data, const net::address& /*from*/) mutable {
             message_received(data);
     }, [this] {
         decltype(_delete_notify) notify;
@@ -46,7 +46,7 @@ struct test_connection_manager {
 private:
     std::function<void(void)> _delete_notify;
     std::jthread _receive_thread;
-    std::function<void(std::string, net::address)> _on_receive;
+    std::function<void(net::buffer, net::address)> _on_receive;
     net::tcp_client _client;
     net::address _address;
 };
@@ -54,12 +54,12 @@ private:
 struct TcpTest : testing::NetTest {};
 
 TEST_F(TcpTest, SimpleConnectionManager) {
-    std::promise<std::tuple<std::string, net::address>> promise;
+    std::promise<std::tuple<net::buffer, net::address>> promise;
     auto fut = promise.get_future();
 
-    auto on_data = [&promise](const std::string& data, const net::address& from, const auto& send) {
+    auto on_data = [&promise](const net::buffer& data, const net::address& from, const auto& send) {
         promise.set_value({data, from});
-        send({data.begin(), data.end()});
+        send(data);
     };
 
     net::tcp_server srv{on_data};
@@ -75,8 +75,8 @@ TEST_F(TcpTest, SimpleConnectionManager) {
     clt.send("hello"s, {"localhost", 4242});
 
     auto [received, from] = fut.get();
-    std::cout << from << " sent: " << received << std::endl;
-    ASSERT_EQ("hello", received);
+    std::cout << from << " sent: " << received.string_view() << std::endl;
+    ASSERT_EQ("hello", received.string_view());
 
     std::this_thread::sleep_for(10ms);
 
@@ -84,18 +84,18 @@ TEST_F(TcpTest, SimpleConnectionManager) {
     auto from_srv = clt.receive(back);
     std::cout << srv_addr << " responded: " << back << std::endl;
     ASSERT_TRUE(from_srv);
-    ASSERT_EQ(received, back);
+    ASSERT_EQ(received.string_view(), back);
     listen_thread.request_stop();
     listen_thread.join();
 }
 
 TEST_F(TcpTest, SimpleConnectionManagerFutureReceiveBack) {
-    std::promise<std::tuple<std::string, net::address>> promise;
+    std::promise<std::tuple<net::buffer, net::address>> promise;
     auto fut = promise.get_future();
 
-    auto on_data = [&promise](const std::string& data, const net::address& from, const auto& send) {
+    auto on_data = [&promise](const net::buffer& data, const net::address& from, const auto& send) {
         promise.set_value({data, from});
-        send({data.begin(), data.end()});
+        send(data);
     };
 
     net::tcp_server srv{on_data};
@@ -109,22 +109,22 @@ TEST_F(TcpTest, SimpleConnectionManagerFutureReceiveBack) {
     clt.send("hello"s, {"localhost", 4242});
 
     auto [received, from] = fut.get();
-    std::cout << from << " sent: " << received << std::endl;
-    ASSERT_EQ("hello", received);
+    std::cout << from << " sent: " << received.string_view() << std::endl;
+    ASSERT_EQ("hello", received.string_view());
 
     auto clt_fut = clt.receive<std::string>(10ms);
     auto received_back = clt_fut.get();
-    ASSERT_EQ(received, std::get<0>(received_back));
+    ASSERT_EQ(received.string_view(), std::get<0>(received_back));
     listen_thread.request_stop();
     listen_thread.join();
 }
 
 TEST_F(TcpTest, CustomConnectionManager) {
 
-    std::promise<std::tuple<std::string, net::address>> promise;
+    std::promise<std::tuple<net::buffer, net::address>> promise;
     auto fut = promise.get_future();
 
-    auto on_data = [&promise](const std::string& data, const net::address& from) {
+    auto on_data = [&promise](const net::buffer& data, const net::address& from) {
         promise.set_value({data, from});
     };
 
@@ -143,8 +143,8 @@ TEST_F(TcpTest, CustomConnectionManager) {
     clt.send("hello"s, {"localhost", 4242});
 
     auto [received, from] = fut.get();
-    std::cout << from << " sent: " << received << std::endl;
-    ASSERT_EQ("hello", received);
+    std::cout << from << " sent: " << received.string_view() << std::endl;
+    ASSERT_EQ("hello", received.string_view());
     listen_thread.request_stop();
     listen_thread.join();
 }

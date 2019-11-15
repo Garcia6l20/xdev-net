@@ -18,6 +18,15 @@
 
 namespace xdev::net {
 
+struct buffer: std::vector<char> {
+    inline std::string_view string_view() const {
+        return { data(), size() };
+    }
+    inline operator std::string_view() const {
+        return string_view();
+    }
+};
+
 struct socket;
 
 #if defined(__cpp_concepts)
@@ -33,11 +42,11 @@ concept SocketAcceptor = requires(T a) {
 };
 template <typename T>
 concept DataFromReceiver = requires(T a) {
-    { a(std::string{}, net::address(sockaddr_storage{})) } -> void;
+    { a(buffer{}, net::address(sockaddr_storage{})) } -> void;
 };
 template <typename T>
 concept DataReceiver = requires(T a) {
-    { a(std::string{}) } -> void;
+    { a(buffer{}) } -> void;
 };
 #else
 #define DataContainer typename
@@ -120,11 +129,11 @@ struct socket
     [[nodiscard]] std::jthread
     start_receiver(ReceiverT&& receiver, std::function<void()> on_disconnect = nullptr) {
         return std::jthread([this, rx = std::forward<ReceiverT>(receiver), on_disconnect](std::stop_token&&stop) mutable {
-            std::vector<char> data;
+            buffer data;
             while (!stop.stop_requested()) try {
                 auto from = receive(data, std::chrono::milliseconds(25));
                 if (from) {
-                    rx({data.data(), data.size()}, from.value());
+                    rx(std::forward<buffer>(data), from.value());
                     data.clear();
                 }
             } catch(socket::pair_disconnected&&) {
@@ -137,10 +146,8 @@ struct socket
     template <DataReceiver ReceiverT>
     [[nodiscard]] std::jthread
     start_receiver(ReceiverT&& receiver, std::function<void()> on_disconnect = nullptr) {
-        using rx_traits = function_traits<decltype(receiver)>;
-        using data_type = rx_traits::arg<0>::type;
-        return start_receiver([receiver = std::forward<decltype(receiver)>(receiver)](data_type&& data, auto&& /*form*/) mutable {
-            receiver(std::forward<data_type>(data));
+        return start_receiver([receiver = std::forward<decltype(receiver)>(receiver)](buffer&& data, auto&& /*form*/) mutable {
+            receiver(std::forward<buffer>(data));
         }, on_disconnect);
     }
 

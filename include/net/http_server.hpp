@@ -28,7 +28,7 @@ struct simple_http_connection_handler: simple_connection_manager {
     std::optional<http_request_parser> _parser;
 
     void start() {
-        _receive_thread = _client.start_receiver([this](const std::string& data, const net::address& /*from*/) mutable {
+        _receive_thread = _client.start_receiver([this](const buffer& data, const net::address& /*from*/) mutable {
             if (!_parser)
                 _parser.emplace();
             auto& parser = _parser.value();
@@ -61,6 +61,6 @@ private:
 };
 
 template <HttpRequestLisenerTrait RequestListenerT>
-http_server<RequestListenerT>::http_server(): base([](std::string&&, net::address&&, auto&&) {}) {}
+http_server<RequestListenerT>::http_server(): base([](buffer&&, net::address&&, auto&&) {}) {}
 
 }  // namespace xdev::net
