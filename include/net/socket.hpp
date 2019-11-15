@@ -19,6 +19,7 @@
 namespace xdev::net {
 
 struct buffer: std::vector<char> {
+    using std::vector<char>::vector;
     inline std::string_view string_view() const {
         return { data(), size() };
     }

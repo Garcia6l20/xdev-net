@@ -27,7 +27,7 @@ struct PrintRequestProcessor {
         default:
             std::cout << "unhandled method: " << req.method_str() << std::endl;
         }
-        return {};
+        return {"good boy !!"};
     }
 };
 
