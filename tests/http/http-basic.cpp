@@ -32,7 +32,6 @@ struct PrintRequestProcessor {
 };
 
 TEST_F(HttpBasicTest, Nominal) {
-
     net::address addr{"localhost", 4242};
 
     net::http_server<PrintRequestProcessor> srv;

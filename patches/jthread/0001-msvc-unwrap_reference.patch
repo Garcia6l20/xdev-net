@@ -1,0 +1,13 @@
+diff --git a/source/stop_token.hpp b/source/stop_token.hpp
+index 1671280..59205ff 100644
+--- a/source/stop_token.hpp
++++ b/source/stop_token.hpp
+@@ -15,7 +15,7 @@
+ 
+ namespace std {
+ 
+-#if __cplusplus <= 201703L
++#if __cplusplus <= 201703L && _MSC_VER < 1923
+ template<typename T>
+ struct unwrap_reference {
+   using type = T;

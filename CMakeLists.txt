@@ -15,18 +15,30 @@ project(net)
 include(FetchContent)
 include(CheckIncludeFile)
 
+function(make_patch_command _out_command _dir)
+    set(${_out_command} "")
+    file(GLOB _patches ${_dir}/*.patch)
+    foreach (_patch ${_patches})
+        list(APPEND ${_out_command} "git apply ${_patch}")
+    endforeach()
+    list(JOIN ${_out_command} " && " ${_out_command})
+endfunction()
+
+make_patch_command(nodejs-http-parser-patch_cmd ${PROJECT_SOURCE_DIR}/patches/jthread)
 FetchContent_Declare(nodejs-http-parser
     GIT_REPOSITORY https://github.com/nodejs/http-parser.git
     GIT_TAG v2.9.2
-    PATCH_COMMAND git apply ${PROJECT_SOURCE_DIR}/patches/nodejs-http-parser/0001-add-cmakelists.patch
+    PATCH_COMMAND ${nodejs-http-parser-patch_cmd}
 )
 FetchContent_MakeAvailable(nodejs-http-parser)
 
 check_include_file(jthread _HAS_JTREAD)
 if(NOT _HAS_JTREAD)
+    make_patch_command(jthread_patch_cmd ${PROJECT_SOURCE_DIR}/patches/jthread)
     FetchContent_Declare(jthread
             GIT_REPOSITORY https://github.com/josuttis/jthread.git
             GIT_TAG 8478824deefdb2268be9b9a873827ba396587f7f
+            PATCH_COMMAND ${jthread_patch_cmd}
     )
     FetchContent_MakeAvailable(jthread)
     list(APPEND ${PROJECT_NAME}_EXTRA_INCLUDE_DIR ${jthread_SOURCE_DIR}/source)
@@ -35,7 +47,7 @@ endif()
 configure_file(include/net/net-config.hpp.in include/net/net-config.hpp @ONLY)
 list(APPEND ${PROJECT_NAME}_EXTRA_INCLUDE_DIR ${PROJECT_BINARY_DIR}/include)
 
-add_library(${PROJECT_NAME} STATIC    
+add_library(${PROJECT_NAME} STATIC
     include/net/net.hpp
     include/net/net-config.hpp.in
     ${PROJECT_BINARY_DIR}/include/net/net-config.hpp

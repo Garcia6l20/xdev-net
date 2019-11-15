@@ -33,7 +33,12 @@ struct test_connection_manager {
     void start() {
         _receive_thread = _client.start_receiver([this](const std::string& data, const net::address& /*from*/) mutable {
             message_received(data);
-        });
+    }, [this] {
+        decltype(_delete_notify) notify;
+        std::swap(notify, _delete_notify);
+        if (notify)
+            notify();
+    });
     }
     void stop() {
         _receive_thread.request_stop();

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <net/address.hpp>
+#include <net/function_traits.hpp>
 
 #include <functional>
 #include <type_traits>
@@ -31,11 +32,16 @@ concept SocketAcceptor = requires(T a) {
     { a(net::socket(-1), net::address(sockaddr_storage{})) } -> void;
 };
 template <typename T>
-concept DataReceiver = requires(T a) {
+concept DataFromReceiver = requires(T a) {
     { a(std::string{}, net::address(sockaddr_storage{})) } -> void;
+};
+template <typename T>
+concept DataReceiver = requires(T a) {
+    { a(std::string{}) } -> void;
 };
 #else
 #define DataContainer typename
+#define DataFromReceiver typename
 #define DataReceiver typename
 #define SocketAcceptor typename
 #endif
@@ -110,9 +116,9 @@ struct socket
         return {};
     }
 
-    template <DataReceiver ReceiverT>
+    template <DataFromReceiver ReceiverT>
     [[nodiscard]] std::jthread
-    start_receiver(ReceiverT&& receiver, std::function<void()> on_disconnect) {
+    start_receiver(ReceiverT&& receiver, std::function<void()> on_disconnect = nullptr) {
         return std::jthread([this, rx = std::forward<ReceiverT>(receiver), on_disconnect](std::stop_token&&stop) mutable {
             std::vector<char> data;
             while (!stop.stop_requested()) try {
@@ -122,24 +128,41 @@ struct socket
                     data.clear();
                 }
             } catch(socket::pair_disconnected&&) {
-                on_disconnect();
+                if (on_disconnect)
+                    on_disconnect();
             }
         });
+    }
+
+    template <DataReceiver ReceiverT>
+    [[nodiscard]] std::jthread
+    start_receiver(ReceiverT&& receiver, std::function<void()> on_disconnect = nullptr) {
+        using rx_traits = function_traits<decltype(receiver)>;
+        using data_type = rx_traits::arg<0>::type;
+        return start_receiver([receiver = std::forward<decltype(receiver)>(receiver)](data_type&& data, auto&& /*form*/) mutable {
+            receiver(std::forward<data_type>(data));
+        }, on_disconnect);
     }
 
     template <DataContainer ContainerT = std::vector<char>>
     [[nodiscard]] std::future<std::tuple<ContainerT, address>>
     receive(const clock::duration &timeout = std::chrono::milliseconds(0)) {
-        return std::async([this, timeout] {
-            size_t bytes = bytes_available(timeout);
-            if (!bytes)
-                throw error("timeout");
+        return std::async([this, timeout]() -> std::tuple<ContainerT, address> {
             ContainerT data;
+            bool can_read = false;
+            if (timeout.count())
+                can_read = wait_can_read(timeout);
+            size_t bytes = bytes_available();
+            if (bytes == 0) {
+                if (can_read)
+                    throw pair_disconnected();
+                return {data, {}};
+            }
             data.resize(bytes);
             auto from = receive(data);
             if (!from)
                 throw error("reveive failed");
-            return std::tuple{data, from.value()};
+            return {data, from.value()};
         });
     }
 

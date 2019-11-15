@@ -19,7 +19,7 @@ struct tcp_client: socket
 {
     tcp_client();
     tcp_client(socket&& sock): socket{std::move(sock)} {}
-    tcp_client(tcp_client&& other): socket{std::move(other)} {}
+    tcp_client(tcp_client&& other) noexcept: socket{std::move(other)} {}
     ~tcp_client() override;
 };
 
@@ -68,7 +68,7 @@ struct simple_connection_manager {
         });
     }
     void start() {
-        _receive_thread = _client.start_receiver([this](const std::string& data, const net::address& /*from*/) mutable {
+        _receive_thread = _client.start_receiver([this](const std::string& data) mutable {
             message_received(data);
         }, [this] {
             disconnected();
