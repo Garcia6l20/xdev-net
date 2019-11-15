@@ -30,8 +30,13 @@ template <typename T>
 concept SocketAcceptor = requires(T a) {
     { a(net::socket(-1), net::address(sockaddr_storage{})) } -> void;
 };
+template <typename T>
+concept DataReceiver = requires(T a) {
+    { a(std::string{}, net::address(sockaddr_storage{})) } -> void;
+};
 #else
 #define DataContainer typename
+#define DataReceiver typename
 #define SocketAcceptor typename
 #endif
 
@@ -75,17 +80,26 @@ struct socket
 
     void bind(const address& address);
 
-    size_t bytes_available(const clock::duration &timeout = std::chrono::milliseconds(0)) const;
+    size_t bytes_available() const;
+    bool wait_can_read(const clock::duration& timeout = std::chrono::milliseconds(0)) const;
 
     address receive(void* buffer, size_t& buffer_sz);
+
+    struct pair_disconnected {};
 
     template <DataContainer ContainerT>
     std::optional<address> receive(ContainerT& buffer, const clock::duration &timeout = std::chrono::milliseconds(0)) {
         size_t sz = buffer.size();
         if (sz == 0) {
-            sz = bytes_available(timeout);
-            if (sz == 0)
+            bool can_read = false;
+            if (timeout.count())
+                can_read = wait_can_read(timeout);
+            sz = bytes_available();
+            if (sz == 0) {
+                if (can_read)
+                    throw pair_disconnected();
                 return {};
+            }
             buffer.resize(sz);
         }
         address&& from = receive(buffer.data(), sz);
@@ -96,17 +110,19 @@ struct socket
         return {};
     }
 
-    template <typename ReceiverT>
+    template <DataReceiver ReceiverT>
     [[nodiscard]] std::jthread
-    start_receiver(ReceiverT&& receiver) {
-        return std::jthread([this, rx = std::forward<ReceiverT>(receiver)](std::stop_token&&stop) mutable {
+    start_receiver(ReceiverT&& receiver, std::function<void()> on_disconnect) {
+        return std::jthread([this, rx = std::forward<ReceiverT>(receiver), on_disconnect](std::stop_token&&stop) mutable {
             std::vector<char> data;
-            while (!stop.stop_requested()) {
+            while (!stop.stop_requested()) try {
                 auto from = receive(data, std::chrono::milliseconds(25));
                 if (from) {
                     rx({data.data(), data.size()}, from.value());
                     data.clear();
                 }
+            } catch(socket::pair_disconnected&&) {
+                on_disconnect();
             }
         });
     }
@@ -127,11 +143,17 @@ struct socket
         });
     }
 
+    void send(const void* buffer, size_t buffer_sz);
     void send(const void* buffer, size_t buffer_sz, const address& to);
 
     template <DataContainer ContainerT>
     void send(const ContainerT& buffer, const address& to) {
         send(buffer.data(), buffer.size(), to);
+    }
+
+    template <DataContainer ContainerT>
+    void send(const ContainerT& buffer) {
+        send(buffer.data(), buffer.size());
     }
 
     template <SocketAcceptor AcceptFunctorT>

@@ -54,7 +54,7 @@ struct simple_connection_manager {
         _on_receive(on_receive),
         _client(std::move(client)),
         _address(std::move(address)) {
-        std::cout << "client connected" << std::endl;
+        std::cout << "client connected: " << _address  << std::endl;
     }
     ~simple_connection_manager() {
         stop();
@@ -70,10 +70,19 @@ struct simple_connection_manager {
     void start() {
         _receive_thread = _client.start_receiver([this](const std::string& data, const net::address& /*from*/) mutable {
             message_received(data);
+        }, [this] {
+            disconnected();
         });
     }
     void stop() {
         _receive_thread.request_stop();
+    }
+    void disconnected() {
+        std::cout << "client disconnected: " << _address << std::endl;
+        _receive_thread.detach();
+        auto notify = _delete_notify;
+        _delete_notify = nullptr;
+        notify();
     }
 
     template<DataContainer DataContainerT>

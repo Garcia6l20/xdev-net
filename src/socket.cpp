@@ -47,21 +47,23 @@ void socket::connect(const address &address) {
         throw error(_socket_error());
 }
 
-size_t socket::bytes_available(const clock::duration& timeout) const {
-    if (timeout.count()) {
-        struct timeval to_tv;
-        auto const sec = std::chrono::duration_cast<std::chrono::seconds>(timeout);
-        to_tv.tv_sec = sec.count();
-        to_tv.tv_usec = std::chrono::duration_cast<std::chrono::microseconds>(timeout - sec).count();
-        fd_set read_set;
-        FD_ZERO(&read_set);
-        FD_SET(_fd, &read_set);
-        int res = select(FD_SETSIZE, &read_set, nullptr, nullptr, &to_tv);
-        if (res < 0)
-            throw error(_socket_error());
-        else if (res == 0)
-            return 0;
-    }
+bool socket::wait_can_read(const clock::duration& timeout) const {
+    struct timeval to_tv;
+    auto const sec = std::chrono::duration_cast<std::chrono::seconds>(timeout);
+    to_tv.tv_sec = sec.count();
+    to_tv.tv_usec = std::chrono::duration_cast<std::chrono::microseconds>(timeout - sec).count();
+    fd_set read_set;
+    FD_ZERO(&read_set);
+    FD_SET(_fd, &read_set);
+    int res = select(FD_SETSIZE, &read_set, nullptr, nullptr, &to_tv);
+    if (res < 0)
+        throw error(_socket_error());
+    else if (res == 0)
+        return false;
+    return true;
+}
+
+size_t socket::bytes_available() const {
 #ifdef _WIN32
     u_long bytes_available = 0;
     ioctlsocket(_fd, FIONREAD, &bytes_available);
@@ -91,6 +93,12 @@ address socket::receive(void* buffer, size_t& buffer_sz) {
 void socket::send(const void* buffer, size_t sz, const address &to) {
     struct sockaddr add = to;
     auto n = ::sendto(_fd, static_cast<const char*>(buffer), sz, 0, &add, sizeof(add));
+    if (n < 0)
+        throw error(_socket_error());
+}
+
+void socket::send(const void* buffer, size_t sz) {
+    auto n = ::send(_fd, static_cast<const char*>(buffer), sz, 0);
     if (n < 0)
         throw error(_socket_error());
 }

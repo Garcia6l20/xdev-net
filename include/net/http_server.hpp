@@ -1,97 +1,66 @@
 #pragma once
 
 #include <net/tcp.hpp>
+#include <net/http_request.hpp>
 
 namespace xdev::net {
 
-namespace node {
-#include <http_parser.h>
-}
+struct http_reply {
+    std::string operator()() {
+        return "";
+    }
+};
 
-struct http_connection_handler: simple_connection_manager {
+#if defined(__cpp_concepts)
+template <typename T>
+concept HttpRequestLisenerTrait = requires(T a) {
+    {a(http_request{})} -> http_reply;
+};
+#else
+#define HttpRequestLisenerTrait typename
+#endif
+
+template <HttpRequestLisenerTrait RequestListenerT>
+struct simple_http_connection_handler: simple_connection_manager {
     using base = simple_connection_manager;
     using base::base; // forward ctors
 
+    std::optional<http_request_parser> _parser;
+
     void start() {
-        http_parser_init(&_parser, node::HTTP_REQUEST);
-        _parser.data = this;
         _receive_thread = _client.start_receiver([this](const std::string& data, const net::address& /*from*/) mutable {
-            auto res = http_parser_execute(&_parser, &_parser_settings, data.data(), data.length());
-            if (res < data.length()) {
-                throw error("http parser error: " +
-                            std::string(http_errno_description(node::http_errno(_parser.http_errno))));
+            if (!_parser)
+                _parser.emplace();
+            auto& parser = _parser.value();
+            if (!parser(data)) {
                 // stop & notify server we stopped
                 stop();
-                if (_delete_notify)
-                    _delete_notify();
-                _delete_notify = nullptr;
-            } else {
+                disconnected();
 
+                throw error("http parser error: " + _parser.value().error_description());
+            } else if (parser) {
+                // message complete
+                auto reply = RequestListenerT{}(std::move(http_request::build(parser)));
+                send(reply());
+                _parser.reset();
             }
+        }, [this] {
+            disconnected();
         });
     }
 
 private:
-
-    static http_connection_handler* manager(node::http_parser* p) {
-        return static_cast<http_connection_handler*>(p->data);
-    }
-
-    static int _on_msg_begin(node::http_parser* p) {
-        return 0;
-    }
-    static int _on_url(node::http_parser* p, const char *at, size_t length) {
-        return 0;
-    }
-    static int _on_status(node::http_parser* p, const char *at, size_t length) {
-        return 0;
-    }
-    static int _on_header_field(node::http_parser* p, const char *at, size_t length) {
-        return 0;
-    }
-    static int _on_header_value(node::http_parser* p, const char *at, size_t length) {
-        return 0;
-    }
-    static int _on_headers_complete(node::http_parser* p) {
-        return 0;
-    }
-    static int _on_body(node::http_parser* p, const char *at, size_t length) {
-        return 0;
-    }
-    static int _on_msg_complete(node::http_parser* p) {
-        return 0;
-    }
-    static int _on_chunk_header(node::http_parser* p) {
-        return 0;
-    }
-    static int _on_chunk_complete(node::http_parser* p) {
-        return 0;
-    }
-
-    node::http_parser _parser;
-    node::http_parser_settings _parser_settings = {
-        &_on_msg_begin,
-        &_on_url,
-        &_on_status,
-        &_on_header_field,
-        &_on_header_value,
-        &_on_headers_complete,
-        &_on_body,
-        &_on_msg_complete,
-        &_on_chunk_header,
-        &_on_chunk_complete
-    };
 };
 
-template <ConnectionHandler ConnectionHandlerT = http_connection_handler>
-struct http_server: tcp_server<ConnectionHandlerT>
+template <HttpRequestLisenerTrait RequestListenerT>
+struct http_server: tcp_server<simple_http_connection_handler<RequestListenerT>>
 {
-    using base = tcp_server<ConnectionHandlerT>;
+    using base = tcp_server<simple_http_connection_handler<RequestListenerT>>;
     http_server();
 private:
 };
 
-template <ConnectionHandler ConnectionHandlerT>
-http_server<ConnectionHandlerT>::http_server(): base([](std::string&&, net::address&&, auto&&) {}) {}
+template <HttpRequestLisenerTrait RequestListenerT>
+http_server<RequestListenerT>::http_server(): base([](std::string&&, net::address&&, auto&&) {}) {}
 
 }  // namespace xdev::net

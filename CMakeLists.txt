@@ -45,7 +45,9 @@ add_library(${PROJECT_NAME} STATIC
     include/net/socket.hpp
     include/net/udp.hpp
     include/net/tcp.hpp
+    include/net/http_parser.hpp
     include/net/http_server.hpp
+    include/net/http_request.hpp
 
     src/net.cpp
     src/error.cpp
@@ -59,7 +61,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC include ${${PROJECT_NAME}_EXTR
 target_link_libraries(${PROJECT_NAME} PUBLIC nodejs-http-parser)
 
 if(WIN32)
-  target_link_libraries(${PROJECT_NAME} PUBLIC wsock32 ws2_32)
+  target_link_libraries(${PROJECT_NAME} PUBLIC wsock32 ws2_32 debug msvcrtd)
 endif()
 
 enable_testing()
