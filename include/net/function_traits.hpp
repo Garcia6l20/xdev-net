@@ -21,7 +21,10 @@ namespace xdev {
             struct arg
             {
                 using type = typename std::tuple_element<i, std::tuple<Args...>>::type;
+                using clean_type = std::remove_cvref_t<type>;
             };
+
+            using function_type = std::function<Ret(Args...)>;
         };
     }
 
