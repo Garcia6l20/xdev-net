@@ -67,6 +67,9 @@ add_library(${PROJECT_NAME} STATIC
     include/net/http_request.hpp
     include/net/http_reply.hpp
     include/net/http_client.hpp
+    include/net/router.hpp
+    include/net/router_details.hpp
+    include/net/route_parameter.hpp
 
     src/net.cpp
     src/error.cpp
