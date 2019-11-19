@@ -190,7 +190,9 @@ struct socket
     template <SocketAcceptor AcceptFunctorT>
     [[nodiscard]] std::jthread
     listen(AcceptFunctorT&& functor, int max_conn = 100) {
-        return std::jthread([this, f = std::forward<AcceptFunctorT>(functor), max_conn](std::stop_token&& stop) mutable {
+        std::promise<void> started_promise;
+        auto fut = started_promise.get_future();
+        auto th = std::jthread([this, f = std::forward<AcceptFunctorT>(functor), max_conn, started_promise=std::move(started_promise)](std::stop_token&& stop) mutable {
             sockaddr_storage peer_add;
             socklen_t peer_add_sz = sizeof(peer_add);
             struct timeval to_tv;
@@ -199,6 +201,7 @@ struct socket
             fd_set read_set;
             if (::listen(_fd, max_conn) != 0)
                 throw error(_socket_error());
+            started_promise.set_value();
             while (!stop.stop_requested()) {
                 FD_ZERO(&read_set);
                 FD_SET(_fd, &read_set);
@@ -213,6 +216,8 @@ struct socket
                 f(socket{conn_fd}, address{peer_add});
             }
         });
+        fut.get();
+        return th;
     }
 
     void connect(const address& address);

@@ -68,8 +68,6 @@ TEST_F(TcpTest, SimpleConnectionManager) {
 
     auto listen_thread = srv.start_listening(srv_addr);
 
-    std::this_thread::sleep_for(10ms);
-
     net::tcp_client clt{};
     clt.connect({"localhost", 4242});
     clt.send("hello"s, {"localhost", 4242});
@@ -101,8 +99,6 @@ TEST_F(TcpTest, SimpleConnectionManagerFutureReceiveBack) {
     net::tcp_server srv{on_data};
 
     auto listen_thread = srv.start_listening({"localhost", 4242});
-
-    std::this_thread::sleep_for(10ms);
 
     net::tcp_client clt{};
     clt.connect({"localhost", 4242});
