@@ -15,16 +15,20 @@ project(net)
 include(FetchContent)
 include(CheckIncludeFile)
 
-function(make_patch_command _out_command _dir)
+macro(make_patch_command _out_command _dir)
     set(${_out_command} "")
     file(GLOB _patches ${_dir}/*.patch)
     foreach (_patch ${_patches})
         list(APPEND ${_out_command} "git apply ${_patch}")
     endforeach()
     list(JOIN ${_out_command} " && " ${_out_command})
-endfunction()
+	if (UNIX)
+		file(WRITE ${PROJECT_BINARY_DIR}/${_out_command}.sh ${${_out_command}})
+		set(${_out_command} bash ${PROJECT_BINARY_DIR}/${_out_command}.sh)
+	endif()
+endmacro()
 
-make_patch_command(nodejs-http-parser-patch_cmd ${PROJECT_SOURCE_DIR}/patches/jthread)
+make_patch_command(nodejs-http-parser-patch_cmd ${PROJECT_SOURCE_DIR}/patches/nodejs-http-parser)
 FetchContent_Declare(nodejs-http-parser
     GIT_REPOSITORY https://github.com/nodejs/http-parser.git
     GIT_TAG v2.9.2

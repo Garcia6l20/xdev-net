@@ -137,7 +137,7 @@ struct socket
                     rx(std::forward<buffer>(data), from.value());
                     data.clear();
                 }
-            } catch(socket::pair_disconnected&&) {
+            } catch(const socket::pair_disconnected&) {
                 if (on_disconnect)
                     on_disconnect();
             }

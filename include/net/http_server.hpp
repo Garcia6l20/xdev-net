@@ -67,7 +67,7 @@ struct simple_http_connection_handler: simple_connection_manager {
 
                 throw error("http parser error: " + _parser.value().error_description());
             } else if (parser) {
-                // message complete  
+                // message complete
                 auto reply = RequestListenerT{}(std::move(http_request::build(parser)));
                 send(reply.http_head());
                 using ReplyType = decltype(reply);
@@ -86,11 +86,11 @@ struct simple_http_connection_handler: simple_connection_manager {
                         }
                     }
                 } else if constexpr (ChunkedBodyProvider<ReplyType>) {
-                    static_assert(false, "Not implemented");
+                    throw std::runtime_error("Not implemented");
                 } else if constexpr (BasicBodyProvider<ReplyType>) {
                     send(reply.body());
                 } else {
-                    static_assert(false, "Unhandled provider type");
+                    throw std::runtime_error(false, "Unhandled provider type");
                 }
                 _parser.reset();
             }
