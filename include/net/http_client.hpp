@@ -11,6 +11,7 @@ namespace xdev::net {
             http_client client{};
             client.connect({ std::string{url.hostname()}, url.port() });
             http_request req;
+            req.headers["User-Agent"] = "xdev/0.1";
             req.method = http_method::HTTP_GET;
             req.path = url.path().empty() ? "/" : url.path();
             client.send(req.http_head());

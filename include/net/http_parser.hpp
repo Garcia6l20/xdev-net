@@ -24,6 +24,8 @@ struct http_parser: node::http_parser {
         node::http_parser_init(this, http_parser_type(_type));
     }
 
+    http_parser(const http_parser&) = delete;
+
     std::string error_description() const {
         return {http_errno_description(node::http_errno(http_errno))};
     }
@@ -37,7 +39,6 @@ struct http_parser: node::http_parser {
     }
 
     std::string url;
-    std::string status;
     buffer body;
     std::map<std::string, std::string> headers;
     bool complete = false;
@@ -58,8 +59,7 @@ private:
         instance(p).url = {at, length};
         return 0;
     }
-    static int _on_status(node::http_parser* p, const char *at, size_t length) {
-        instance(p).status = {at, length};
+    static int _on_status(node::http_parser* p, const char */*at*/, size_t /*length*/) {
         return 0;
     }
     static int _on_header_field(node::http_parser* p, const char *at, size_t length) {
@@ -68,7 +68,7 @@ private:
         return 0;
     }
     static int _on_header_value(node::http_parser* p, const char *at, size_t length) {
-        auto me = instance(p);
+        auto& me = instance(p);
         me.headers[{me._field, me._field_length}] = {at, length};
         me._field = nullptr;
         me._field_length = 0;
@@ -87,10 +87,10 @@ private:
         instance(p).complete = true;
         return 0;
     }
-    static int _on_chunk_header(node::http_parser* p) {
+    static int _on_chunk_header(node::http_parser* /*p*/) {
         throw 0;
     }
-    static int _on_chunk_complete(node::http_parser* p) {
+    static int _on_chunk_complete(node::http_parser* /*p*/) {
         throw 0;
     }
 

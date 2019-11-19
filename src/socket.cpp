@@ -90,14 +90,14 @@ address socket::receive(void* buffer, size_t& buffer_sz) {
     }
 }
 
-void socket::send(const void* buffer, size_t sz, const address &to) {
+void socket::send(const void* buffer, size_t sz, const address &to) const {
     struct sockaddr add = to;
     auto n = ::sendto(_fd, static_cast<const char*>(buffer), sz, 0, &add, sizeof(add));
     if (n < 0)
         throw error(_socket_error());
 }
 
-void socket::send(const void* buffer, size_t sz) {
+void socket::send(const void* buffer, size_t sz) const {
     auto n = ::send(_fd, static_cast<const char*>(buffer), sz, 0);
     if (n < 0)
         throw error(_socket_error());

@@ -91,7 +91,7 @@ struct simple_connection_manager {
     }
 
     template<DataContainer DataContainerT>
-    void send(const DataContainerT& data) {
+    void send(const DataContainerT& data) const {
         _client.send(data, _address);
     }
 
@@ -117,13 +117,21 @@ struct tcp_server: socket
     ~tcp_server() override;
     [[nodiscard]] std::jthread start_listening(const address& address, int max_conn = 100);
     using on_delete = std::function<void()>;
-private:
+protected:
     using socket::bind;
     using socket::listen;
     std::map<int, std::shared_ptr<ConnectionHandlerT>> _handlers;
     unique_function<void()> _stop_listen;
     client_handler_creator _connection_create;
     bool _cleaning = false;
+
+    void remove_handler(sock_fd_t fd) {
+        if (_cleaning)
+            return;
+        auto it = _handlers.find(fd);
+        if (it != _handlers.end())
+            _handlers.erase(it);
+    }
 };
 
 template <ConnectionHandler ConnectionHandlerT>
@@ -160,11 +168,7 @@ std::jthread tcp_server<ConnectionHandlerT>::start_listening(const address& addr
         int fd = socket.fd();
         _handlers.emplace(fd, _connection_create(tcp_client{std::move(socket)}, std::forward<net::address>(addr), [this, fd = socket.fd()]() mutable {
             // deleted
-            if (_cleaning)
-                return;
-            auto it = _handlers.find(fd);
-            if (it != _handlers.end())
-                _handlers.erase(it);
+            remove_handler(fd);
         }));
         _handlers.at(fd)->start();
     }, max_conn);

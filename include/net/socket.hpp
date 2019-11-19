@@ -20,6 +20,10 @@ namespace xdev::net {
 
 struct buffer: std::vector<char> {
     using std::vector<char>::vector;
+    buffer(const std::string& str):
+        buffer(str.size()) {
+        std::copy(str.begin(), str.end(), begin());
+    }
     inline std::string_view string_view() const {
         return { data(), size() };
     }
@@ -174,16 +178,16 @@ struct socket
         });
     }
 
-    void send(const void* buffer, size_t buffer_sz);
-    void send(const void* buffer, size_t buffer_sz, const address& to);
+    void send(const void* buffer, size_t buffer_sz) const;
+    void send(const void* buffer, size_t buffer_sz, const address& to) const;
 
     template <DataContainer ContainerT>
-    void send(const ContainerT& buffer, const address& to) {
+    void send(const ContainerT& buffer, const address& to) const {
         send(buffer.data(), buffer.size(), to);
     }
 
     template <DataContainer ContainerT>
-    void send(const ContainerT& buffer) {
+    void send(const ContainerT& buffer) const {
         send(buffer.data(), buffer.size());
     }
 

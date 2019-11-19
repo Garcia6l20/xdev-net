@@ -16,7 +16,6 @@ struct http_request {
     http_headers headers;
     std::string path;
     buffer body;
-    std::string status;
 
     std::string method_str() const {
         return http_method_str(method);
@@ -28,7 +27,6 @@ struct http_request {
             .headers = std::move(parser.headers),
             .path = std::move(parser.url),
             .body = std::move(parser.body),
-            .status = std::move(parser.status),
         };
         return std::move(req);
     }
