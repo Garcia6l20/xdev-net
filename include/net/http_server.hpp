@@ -32,7 +32,7 @@ concept BasicBodyProvider = requires(T a) {
 };
 template <typename T>
 concept StreamBodyProvider = requires(T a) {
-    { a.body() }-> std::istream;
+    { a.body() }-> std::istream&;
 };
 template <typename T>
 concept ChunkedBodyProvider = requires(T a) {
@@ -93,7 +93,7 @@ struct simple_http_connection_handler: simple_connection_manager {
         overloaded {
             [](auto&&) {throw std::runtime_error("Unhandled HttpReplyProvider");},
             [this](StreamBodyProvider&&provider) {
-                std::istream body = provider.body();
+                auto& body = provider.body();
                 buffer buf(4096);
                 while (!body.eof()) {
                     body.read(buf.data(), buf.size());
@@ -133,17 +133,17 @@ struct simple_http_connection_handler: simple_connection_manager {
                 try {
                     (*_router)(_context.request.path, _context);
                 } catch (const router_t::not_found&) {
-                    http_reply rep;
+                    http_basic_body_reply rep;
                     rep.status = http_status::HTTP_STATUS_NOT_FOUND;
                     rep.body = {"not found"};
                     send(rep);
                 } catch (const std::exception& err) {
-                    http_reply rep;
+                    http_basic_body_reply rep;
                     rep.status = http_status::HTTP_STATUS_INTERNAL_SERVER_ERROR;
                     rep.body = {err.what()};
                     send(rep);
                 } catch (...) {
-                    http_reply rep;
+                    http_basic_body_reply rep;
                     rep.status = http_status::HTTP_STATUS_INTERNAL_SERVER_ERROR;
                     rep.body = {"unknown error"};
                     send(rep);

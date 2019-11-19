@@ -7,7 +7,7 @@
 
 namespace xdev::net {
     struct http_client: private net::tcp_client {
-        static http_reply get(url&& url) {
+        static http_basic_body_reply get(url&& url) {
             http_client client{};
             client.connect({ std::string{url.hostname()}, url.port() });
             http_request req;
@@ -21,7 +21,7 @@ namespace xdev::net {
                 auto [data, _] = fut.get();
                 parser({data.data(), data.size()});
             }
-            return http_reply::load(parser);
+            return http_basic_body_reply::load(parser);
         }
     };
 }  // namespace xdev::net
