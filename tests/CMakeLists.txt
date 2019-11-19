@@ -17,5 +17,6 @@ if (VALGRIND_EXE)
 endif()
 
 add_subdirectory(traits)
+add_subdirectory(url)
 add_subdirectory(socket)
 add_subdirectory(http)

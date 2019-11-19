@@ -3,6 +3,7 @@
 #include <net/http_parser.hpp>
 
 #include <map>
+#include <sstream>
 
 namespace xdev::net {
 
@@ -13,8 +14,8 @@ using http_request_parser = http_parser<http_parser_type::HTTP_REQUEST>;
 struct http_request {
     http_method method;
     http_headers headers;
-    std::string url;
-    std::string body;
+    std::string path;
+    buffer body;
     std::string status;
 
     std::string method_str() const {
@@ -25,11 +26,20 @@ struct http_request {
         http_request req{
             .method = static_cast<http_method>(parser.method),
             .headers = std::move(parser.headers),
-            .url = std::move(parser.url),
+            .path = std::move(parser.url),
             .body = std::move(parser.body),
             .status = std::move(parser.status),
         };
         return std::move(req);
+    }
+
+    std::string http_head() const {
+        std::ostringstream ss;
+        ss << method_str() << " " << path << " " << "HTTP/1.1\r\n";
+        for (auto&& [field, value] : headers)
+            ss << field << ": " << value << "\r\n";
+        ss << "\r\n";
+        return ss.str();
     }
 };
 

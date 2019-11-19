@@ -32,12 +32,12 @@ TEST_F(UdpTest, TxRxSequencial) {
 TEST_F(UdpTest, TxRxCallback) {
     net::udp_socket rx{};
     rx.bind({"127.0.0.1", 4242});
-    using ResutlT = std::tuple<std::string, net::address>;
+    using ResutlT = std::tuple<net::buffer, net::address>;
     auto promise = std::make_shared<std::promise<ResutlT>>();
     auto fut = promise->get_future();
 
-    auto receive_thread = rx.start_receiver([promise](const std::string& data, const net::address& from) mutable {
-        std::cout << data << std::endl;
+    auto receive_thread = rx.start_receiver([promise](const net::buffer& data, const net::address& from) mutable {
+        std::cout << data.string_view() << std::endl;
         promise->set_value({data, from});
     });
 
@@ -49,9 +49,9 @@ TEST_F(UdpTest, TxRxCallback) {
     auto buffer = std::get<0>(received);
     auto from = std::get<1>(received);
 
-    EXPECT_EQ(buffer, "hello");
+    EXPECT_EQ(buffer.string_view(), "hello");
 
-    std::cout << from << " sent: " << buffer << std::endl;
+    std::cout << from << " sent: " << buffer.string_view() << std::endl;
 }
 
 TEST_F(UdpTest, TxRxFuture) {

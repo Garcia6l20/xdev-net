@@ -1,6 +1,8 @@
 #include <net-test.hpp>
 
 #include <net/http_server.hpp>
+#include <net/http_client.hpp>
+#include <net/http_reply.hpp>
 
 #include <iostream>
 
@@ -12,7 +14,7 @@ struct HttpBasicTest: testing::NetTest {};
 
 struct PrintRequestProcessor {
     net::http_reply operator()(const net::http_request& req) {
-        std::cout << req.url << std::endl;
+        std::cout << req.path << std::endl;
         std::cout << req.status << std::endl;
         for (const auto& [field, value]: req.headers)
             std::cout << field << ": " << value << std::endl;
@@ -22,7 +24,7 @@ struct PrintRequestProcessor {
             break;
         case net::http_method::HTTP_POST:
         case net::http_method::HTTP_PUT:
-            std::cout << "POST: " << req.body << std::endl;
+            std::cout << "POST: " << req.body.string_view() << std::endl;
             break;
         default:
             std::cout << "unhandled method: " << req.method_str() << std::endl;
@@ -39,7 +41,5 @@ TEST_F(HttpBasicTest, Nominal) {
 
     std::cout << "http server listening at: " << addr << std::endl;
 
-    while(true) {
-        std::this_thread::sleep_for(250ms);
-    }
+    ASSERT_EQ("good boy !!", net::http_client::get({ "http://localhost:4242" }).body().string_view());
 }

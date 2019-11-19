@@ -60,6 +60,8 @@ add_library(${PROJECT_NAME} STATIC
     include/net/http_parser.hpp
     include/net/http_server.hpp
     include/net/http_request.hpp
+    include/net/http_reply.hpp
+    include/net/http_client.hpp
 
     src/net.cpp
     src/error.cpp

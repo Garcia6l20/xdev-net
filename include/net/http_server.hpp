@@ -3,44 +3,48 @@
 #include <net/tcp.hpp>
 #include <net/http_request.hpp>
 
-#include <sstream>
-#include <ostream>
-#include <iterator>
-
 namespace xdev::net {
 
-using http_status = node::http_status;
-const auto http_status_str = node::http_status_str;
-
-struct http_reply {
-
-    http_reply() = default;
-    http_reply(std::string_view body) {
-        _body.assign(body.begin(), body.end());
-    }
-
-    http_status _status = http_status::HTTP_STATUS_OK;
-    http_headers _headers = { {{"Content-Type"}, {"application/x-empty"}} };
-    buffer _body;
-
-    std::tuple<std::string, buffer> operator()() {
-        _headers["Content-Length"] = std::to_string(_body.size());
-        std::ostringstream ss;
-        ss << "HTTP/1.1 " << _status << " " << http_status_str(_status) << "\r\n";
-        for (auto&& [field, value] : _headers)
-            ss << field << ": " << value << "\r\n";
-        ss << "\r\n";
-        auto http_head = ss.str();
-        return { ss.str(), std::move(_body) };
+template<typename CharT, typename TraitsT = std::char_traits<CharT> >
+class vectorwrapbuf : public std::basic_streambuf<CharT, TraitsT> {
+public:
+    vectorwrapbuf(std::vector<CharT>& vec) {
+        setg(vec.data(), vec.data(), vec.data() + vec.size());
     }
 };
 
-#if defined(__cpp_concepts)
+struct buffer_istreambuf: std::basic_streambuf<char> {
+    buffer_istreambuf(buffer& buf) {
+        setg(buf.data(), buf.data(), buf.data() + buf.size());
+    }
+};
+
+#if defined(__cpp_concepts) || defined(_MSC_VER)
+template <typename T>
+concept HttpHeadProvider = requires(T a) {
+    { a.http_head() }->std::string;
+};
+template <typename T>
+concept BasicBodyProvider = requires(T a) {
+    { a.body() }-> DataContainer;
+};
+template <typename T>
+concept StreamBodyProvider = requires(T a) {
+    { a.body() }-> std::istream;
+};
+template <typename T>
+concept ChunkedBodyProvider = requires(T a) {
+    { a.next_body() }-> std::optional<buffer>;
+};
+template <typename T>
+concept HttpReplyProvider = HttpHeadProvider<T> && ( StreamBodyProvider<T> || ChunkedBodyProvider<T> || BasicBodyProvider<T>);
+
 template <typename T>
 concept HttpRequestLisenerTrait = requires(T a) {
-    {a(http_request{})} -> http_reply;
+    {a(http_request{})} -> HttpReplyProvider;
 };
 #else
+#define BodyProvider typename
 #define HttpRequestLisenerTrait typename
 #endif
 
@@ -63,10 +67,31 @@ struct simple_http_connection_handler: simple_connection_manager {
 
                 throw error("http parser error: " + _parser.value().error_description());
             } else if (parser) {
-                // message complete
-                auto [http, content] = RequestListenerT{}(std::move(http_request::build(parser)))();
-                send(http);
-                send(content);
+                // message complete  
+                auto reply = RequestListenerT{}(std::move(http_request::build(parser)));
+                send(reply.http_head());
+                using ReplyType = decltype(reply);
+                if constexpr (StreamBodyProvider<ReplyType>) {
+                    std::istream body = reply.body();
+
+                    buffer buf(4096);
+                    while (!body.eof()) {
+                        body.read(buf.data(), buf.size());
+                        auto bytes = body.gcount();
+                        if (bytes == buf.size()) {
+                            send(buf);
+                        } else {
+                            buf.resize(bytes);
+                            send(buf);
+                        }
+                    }
+                } else if constexpr (ChunkedBodyProvider<ReplyType>) {
+                    static_assert(false, "Not implemented");
+                } else if constexpr (BasicBodyProvider<ReplyType>) {
+                    send(reply.body());
+                } else {
+                    static_assert(false, "Unhandled provider type");
+                }
                 _parser.reset();
             }
         }, [this] {

@@ -9,9 +9,13 @@ namespace node {
 #include <http_parser.h>
 }
 
+using http_status = node::http_status;
+const auto http_status_str = node::http_status_str;
+
 using http_method = node::http_method;
-using http_parser_type = node::http_parser_type;
 const auto http_method_str = node::http_method_str;
+
+using http_parser_type = node::http_parser_type;
 
 template <http_parser_type _type = http_parser_type::HTTP_BOTH>
 struct http_parser: node::http_parser {
@@ -34,7 +38,7 @@ struct http_parser: node::http_parser {
 
     std::string url;
     std::string status;
-    std::string body;
+    buffer body;
     std::map<std::string, std::string> headers;
     bool complete = false;
     
@@ -74,7 +78,9 @@ private:
         return 0;
     }
     static int _on_body(node::http_parser* p, const char *at, size_t length) {
-        instance(p).body.append(at, length);
+        if (instance(p).body.size() < length)
+            instance(p).body.resize(length);
+        std::copy(at, at + length, instance(p).body.begin());
         return 0;
     }
     static int _on_msg_complete(node::http_parser* p) {
