@@ -46,7 +46,15 @@ concept HttpRequestLisenerTrait = requires(T a) {
 #else
 #define BodyProvider typename
 #define HttpRequestLisenerTrait typename
+#define HttpHeadProvider typename
+#define BasicBodyProvider typename
+#define StreamBodyProvider typename
+#define ChunkedBodyProvider typename
+#define HttpReplyProvider typename
 #endif
+
+template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
+template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 
 template <HttpRequestLisenerTrait RequestListenerT>
 struct simple_http_connection_handler: simple_connection_manager {
@@ -70,28 +78,28 @@ struct simple_http_connection_handler: simple_connection_manager {
                 // message complete
                 auto reply = RequestListenerT{}(std::move(http_request::build(parser)));
                 send(reply.http_head());
-                using ReplyType = decltype(reply);
-                if constexpr (StreamBodyProvider<ReplyType>) {
-                    std::istream body = reply.body();
 
-                    buffer buf(4096);
-                    while (!body.eof()) {
-                        body.read(buf.data(), buf.size());
-                        auto bytes = body.gcount();
-                        if (bytes == buf.size()) {
-                            send(buf);
-                        } else {
-                            buf.resize(bytes);
-                            send(buf);
+                using ReplyType = decltype(reply);
+                overloaded {
+                    [](auto&&) {throw std::runtime_error("Unhandled ReplyType");},
+                    [this](StreamBodyProvider&&provider) {
+                        std::istream body = provider.body();
+                        buffer buf(4096);
+                        while (!body.eof()) {
+                            body.read(buf.data(), buf.size());
+                            auto bytes = body.gcount();
+                            if (bytes == buf.size()) {
+                                send(buf);
+                            } else {
+                                buf.resize(bytes);
+                                send(buf);
+                            }
                         }
+                    },
+                    [this](BasicBodyProvider&&provider) {
+                        send(provider.body());
                     }
-                } else if constexpr (ChunkedBodyProvider<ReplyType>) {
-                    throw std::runtime_error("Not implemented");
-                } else if constexpr (BasicBodyProvider<ReplyType>) {
-                    send(reply.body());
-                } else {
-                    throw std::runtime_error(false, "Unhandled provider type");
-                }
+                } (reply);
                 _parser.reset();
             }
         }, [this] {

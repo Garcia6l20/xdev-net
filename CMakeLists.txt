@@ -56,6 +56,7 @@ add_library(${PROJECT_NAME} STATIC
     include/net/net-config.hpp.in
     ${PROJECT_BINARY_DIR}/include/net/net-config.hpp
     include/net/unique_function.hpp
+    include/net/function_traits.hpp
     include/net/error.hpp
     include/net/address.hpp
     include/net/socket.hpp
