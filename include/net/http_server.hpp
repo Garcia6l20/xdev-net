@@ -1,190 +1,110 @@
 #pragma once
 
-#include <net/tcp.hpp>
-#include <net/http_request.hpp>
-#include <net/http_reply.hpp>
+#include <net/net.hpp>
 #include <net/router.hpp>
+
+#include <boost/asio/spawn.hpp>
+
+#include <functional>
+#include <variant>
 
 namespace xdev::net {
 
-template<typename CharT, typename TraitsT = std::char_traits<CharT> >
-class vectorwrapbuf : public std::basic_streambuf<CharT, TraitsT> {
+namespace http {
+
+template <typename...BodyTypes>
+class session: public std::enable_shared_from_this<session<BodyTypes...>> {
 public:
-    vectorwrapbuf(std::vector<CharT>& vec) {
-        setg(vec.data(), vec.data(), vec.data() + vec.size());
-    }
-};
 
-struct buffer_istreambuf: std::basic_streambuf<char> {
-    buffer_istreambuf(buffer& buf) {
-        setg(buf.data(), buf.data(), buf.data() + buf.size());
-    }
-};
-
-#if defined(__cpp_concepts) || defined(_MSC_VER)
-template <typename T>
-concept HttpHeadProvider = requires(T a) {
-    { a.http_head() }->std::string;
-};
-template <typename T>
-concept BasicBodyProvider = requires(T a) {
-    { a.body } -> DataContainer;
-};
-template <typename T>
-concept StreamBodyProvider = requires(T a) {
-    { a.body() }-> std::istream&;
-};
-template <typename T>
-concept ChunkedBodyProvider = requires(T a) {
-    { a.body() }-> std::optional<buffer>;
-};
-template <typename T>
-concept HttpReplyProvider = HttpHeadProvider<T> && ( StreamBodyProvider<T> || ChunkedBodyProvider<T> || BasicBodyProvider<T>);
-
-template <typename T>
-concept HttpRequestLisenerTrait = requires(T a) {
-    {a(http_request{})} -> HttpReplyProvider;
-};
-#else
-#define BodyProvider typename
-#define HttpRequestLisenerTrait typename
-#define HttpHeadProvider typename
-#define BasicBodyProvider typename
-#define StreamBodyProvider typename
-#define ChunkedBodyProvider typename
-#define HttpReplyProvider typename
-#endif
-
-template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
-template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
-
-struct simple_http_connection_handler: simple_connection_manager {
-    using base = simple_connection_manager;
-    using base::base; // forward ctors
-
-    std::optional<http_request_parser> _parser;
-
-    struct context_t {
-        http_request request;
-        void send_reply(HttpReplyProvider&& reply) {
-            _handler.send(std::forward<decltype(reply)>(reply));
-        }
-        template <typename T, typename...Args>
-        void make_userdata(Args&&...args) {
-            _userdata = std::make_shared<T>(std::forward<Args>(args)...);
-        }
-        template <typename T>
-        std::shared_ptr<T> userdata() {
-            return std::dynamic_pointer_cast<T>(_userdata);
-        }
-    private:
-        std::shared_ptr<void> _userdata;
-        context_t(simple_http_connection_handler& handler): _handler{handler} {}
-        simple_http_connection_handler& _handler;
-        friend struct simple_http_connection_handler;
+    struct context {
+        beast::http::request<string_body> request;
     };
-    context_t _context {*this};
 
-    using router_t = base_router<void, context_t>;
-    std::shared_ptr<router_t> _router;
+    using router_return_type = std::variant<response<string_body>,
+                                            response<file_body>,
+                                            response<dynamic_body>,
+                                            BodyTypes...>;
+    using router_type = base_router<router_return_type, context>;
+    using router_ptr = std::shared_ptr<router_type>;
 
-    void send(HttpReplyProvider&& reply) const {
-        base::send(reply.http_head());
-        overloaded {
-            [](auto&&) {throw std::runtime_error("Unhandled HttpReplyProvider");},
-            [this](StreamBodyProvider&&provider) {
-                auto& body = provider.body();
-                buffer buf(4096);
-                while (!body.eof()) {
-                    body.read(buf.data(), buf.size());
-                    auto bytes = body.gcount();
-                    if (bytes == buf.size()) {
-                        base::send(buf);
-                    } else {
-                        buf.resize(bytes);
-                        base::send(buf);
-                    }
-                }
-            },
-            [this](BasicBodyProvider&&provider) {
-                base::send(provider.body);
-            }
-        } (reply);
+    bool _close;
+
+    session(tcp::socket socket, router_ptr router):
+        _socket{std::move(socket)}, _router{router} {
     }
 
-    void set_router(std::shared_ptr<router_t>& router) {
-        _router = router;
+    template<bool isRequest, class Body, class Fields>
+    bool send(beast::http::message<isRequest, Body, Fields>&& msg, asio::yield_context yield, error_code& ec) {
+        _close = msg.need_eof();
+        serializer<isRequest, Body, Fields> sr{msg};
+        async_write(_socket, sr, yield[ec]);
+        return msg.need_eof();
     }
 
-    void start() {
-        _receive_thread = _client.start_receiver([this](const buffer& data, const net::address& /*from*/) mutable {
-            if (!_parser)
-                _parser.emplace();
-            auto& parser = _parser.value();
-            if (!parser(data)) {
-                // stop & notify server we stopped
-                stop();
-                disconnected();
-
-                throw error("http parser error: " + _parser.value().error_description());
-            } else if (parser) {
-                // message complete
-                _context.request = http_request::build(parser);
-                try {
-                    (*_router)(_context.request.path, _context);
-                } catch (const router_t::not_found&) {
-                    http_basic_body_reply rep;
-                    rep.status = http_status::HTTP_STATUS_NOT_FOUND;
-                    rep.body = {"not found"};
-                    send(rep);
-                } catch (const std::exception& err) {
-                    http_basic_body_reply rep;
-                    rep.status = http_status::HTTP_STATUS_INTERNAL_SERVER_ERROR;
-                    rep.body = {err.what()};
-                    send(rep);
-                } catch (...) {
-                    http_basic_body_reply rep;
-                    rep.status = http_status::HTTP_STATUS_INTERNAL_SERVER_ERROR;
-                    rep.body = {"unknown error"};
-                    send(rep);
-                }
-
-                _parser.reset();
-            }
-        }, [this] {
-            disconnected();
-        });
+    void read(asio::yield_context yield) {
+        auto self {this->shared_from_this()};
+        beast::error_code ec;
+        beast::flat_buffer buffer;
+        context ctx;
+        for (;;) {
+            async_read(_socket, buffer, ctx.request, yield[ec]);
+            if (ec == http::error::end_of_stream)
+                break;
+            if  (ec)
+                throw std::runtime_error(ec.message());
+            auto target = ctx.request.target();
+            std::visit([this, yield, &ec, &ctx](auto&&resp) {
+                resp.version(ctx.request.version());
+                resp.keep_alive(ctx.request.keep_alive());
+                send(std::move(resp), yield, ec);
+            }, (*_router)({target.data(), target.size()}, ctx));
+            if (_close || ec)
+                break;
+        }
+        _socket.shutdown(tcp::socket::shutdown_send, ec);
     }
+    tcp::socket _socket;
+    router_ptr _router;
 };
 
-struct http_server: tcp_server<simple_http_connection_handler>
-{
-    using base = tcp_server<simple_http_connection_handler>;
-    using context = simple_http_connection_handler::context_t;
-    inline http_server();
+template <typename...BodyTypes>
+class server {
+    using session_type = session<BodyTypes...>;
+public:
+    using context_type = typename session_type::context;
+    using route_return_type = typename session_type::router_return_type;
+
+    server(asio::io_context& ctx, const tcp::endpoint& endpoint):
+        _acceptor{ctx, endpoint},
+        _socket{ctx} {
+        asio::spawn(ctx, std::bind(&server::_accept, this, std::placeholders::_1));
+    }
 
     template <typename ViewHandlerT>
     void operator()(const std::string&path, ViewHandlerT handler) {
         _router->add_route(path, handler);
     }
-
-    std::jthread start_listening(const address& address, int max_conn = 5) {
-        bind(address);
-        return listen([this](socket&& socket, net::address&& addr) {
-            int fd = socket.fd();
-            auto handler = _connection_create(tcp_client{std::move(socket)}, std::forward<net::address>(addr), [this, fd = socket.fd()]() mutable {
-                remove_handler(fd);
-            });
-            handler->set_router(_router);
-            _handlers.emplace(fd, handler);
-            _handlers.at(fd)->start();
-        }, max_conn);
+private:
+    void _accept(asio::yield_context yield) {
+        error_code ec;
+        for (;;) {
+            _acceptor.async_accept(_socket, yield[ec]);
+            if (!ec) {
+                auto sess = std::make_shared<session_type>(std::move(_socket),
+                                                           _router);
+                asio::spawn(_acceptor.get_executor(),
+                            [sess] (asio::yield_context yield) {
+                    sess->read(yield);
+                });
+            }
+        }
     }
 
-private:
-    std::shared_ptr<simple_http_connection_handler::router_t> _router = std::make_shared<simple_http_connection_handler::router_t>();
+    tcp::acceptor _acceptor;
+    tcp::socket _socket;
+    typename session_type::router_ptr _router = std::make_shared<typename session_type::router_type>();
 };
 
-http_server::http_server(): base([](buffer&&, net::address&&, auto&&) {}) {}
+} // namespace http
 
 }  // namespace xdev::net

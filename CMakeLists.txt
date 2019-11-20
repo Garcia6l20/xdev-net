@@ -12,9 +12,6 @@ endif()
 
 project(net)
 
-include(FetchContent)
-include(CheckIncludeFile)
-
 macro(make_patch_command _out_command _dir)
     set(${_out_command} "")
     file(GLOB _patches ${_dir}/*.patch)
@@ -28,25 +25,7 @@ macro(make_patch_command _out_command _dir)
 	endif()
 endmacro()
 
-make_patch_command(nodejs-http-parser-patch_cmd ${PROJECT_SOURCE_DIR}/patches/nodejs-http-parser)
-FetchContent_Declare(nodejs-http-parser
-    GIT_REPOSITORY https://github.com/nodejs/http-parser.git
-    GIT_TAG v2.9.2
-    PATCH_COMMAND ${nodejs-http-parser-patch_cmd}
-)
-FetchContent_MakeAvailable(nodejs-http-parser)
-
-check_include_file(jthread _HAS_JTREAD)
-if(NOT _HAS_JTREAD)
-    make_patch_command(jthread_patch_cmd ${PROJECT_SOURCE_DIR}/patches/jthread)
-    FetchContent_Declare(jthread
-            GIT_REPOSITORY https://github.com/josuttis/jthread.git
-            GIT_TAG 8478824deefdb2268be9b9a873827ba396587f7f
-            PATCH_COMMAND ${jthread_patch_cmd}
-    )
-    FetchContent_MakeAvailable(jthread)
-    list(APPEND ${PROJECT_NAME}_EXTRA_INCLUDE_DIR ${jthread_SOURCE_DIR}/source)
-endif()
+include(./CMake/GetBoost.cmake)
 
 configure_file(include/net/net-config.hpp.in include/net/net-config.hpp @ONLY)
 list(APPEND ${PROJECT_NAME}_EXTRA_INCLUDE_DIR ${PROJECT_BINARY_DIR}/include)
@@ -55,32 +34,19 @@ add_library(${PROJECT_NAME} STATIC
     include/net/net.hpp
     include/net/net-config.hpp.in
     ${PROJECT_BINARY_DIR}/include/net/net-config.hpp
-    include/net/unique_function.hpp
     include/net/function_traits.hpp
-    include/net/error.hpp
-    include/net/address.hpp
-    include/net/socket.hpp
-    include/net/udp.hpp
-    include/net/tcp.hpp
-    include/net/http_parser.hpp
     include/net/http_server.hpp
-    include/net/http_request.hpp
-    include/net/http_reply.hpp
     include/net/http_client.hpp
     include/net/router.hpp
     include/net/router_details.hpp
     include/net/route_parameter.hpp
 
     src/net.cpp
-    src/error.cpp
-    src/address.cpp
-    src/socket.cpp
-    src/udp.cpp
-    src/tcp.cpp
-    src/http_server.cpp
 )
-target_include_directories(${PROJECT_NAME} PUBLIC include ${${PROJECT_NAME}_EXTRA_INCLUDE_DIR})
-target_link_libraries(${PROJECT_NAME} PUBLIC nodejs-http-parser)
+target_include_directories(${PROJECT_NAME} PUBLIC include ${${PROJECT_NAME}_EXTRA_INCLUDE_DIR} ${Boost_INCLUDE_DIR})
+target_link_directories(${PROJECT_NAME} PUBLIC ${Boost_LIBRARY_DIR})
+target_link_libraries(${PROJECT_NAME} PUBLIC ${Boost_LIBRARIES})
+add_dependencies(${PROJECT_NAME} boost)
 
 if(WIN32)
   target_link_libraries(${PROJECT_NAME} PUBLIC wsock32 ws2_32 debug msvcrtd)

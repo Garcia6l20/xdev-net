@@ -1,10 +1,7 @@
 #pragma once
 
-#ifndef _WIN32
-#include <sys/socket.h>
-#else
-#include <WS2tcpip.h>
-#endif
+#include <boost/asio.hpp>
+#include <boost/beast.hpp>
 
 #if !defined(__cpp_concepts)
 # ifdef _WIN32
@@ -15,14 +12,13 @@
 #endif
 
 namespace xdev::net {
+    using error_code = boost::system::error_code;
+    namespace beast = boost::beast;
+    namespace asio = boost::asio;
+    namespace ip = boost::asio::ip;
+    using tcp = ip::tcp;
 
-	void initialize();
-	void cleanup();
-
-enum family {
-    none = 0,
-    inet = AF_INET,
-    inet6 = AF_INET6,
-};
-
+    namespace http {
+        using namespace beast::http;
+    }
 }  // namespace xdev::net

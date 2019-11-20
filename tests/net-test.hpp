@@ -8,10 +8,8 @@ namespace testing {
 struct NetTest : testing::Test {
 protected:
     void SetUp() override {
-        xdev::net::initialize();
     }
     void TearDown() override {
-        xdev::net::cleanup();
     }
 };
 }

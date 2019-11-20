@@ -3,8 +3,6 @@
 #include <regex>
 #include <optional>
 
-#include <net/error.hpp>
-
 namespace xdev::net {
 
     /**
@@ -52,7 +50,7 @@ namespace xdev::net {
                     _fragment = { _data.data() + m.position(6) + 1, static_cast<size_t>(m.length(6)) - 1 };
                 }
             } else {
-                throw error("cannot parse url: " + _data);
+                throw std::runtime_error("cannot parse url: " + _data);
             }
         }
 
@@ -69,7 +67,7 @@ namespace xdev::net {
                     if (m[6].length())
                         port = std::stoi(m[6]);
                 } else {
-                    throw error("cannot parse url's authority: " + tmp);
+                    throw std::runtime_error("cannot parse url's authority: " + tmp);
                 }
             }
             std::string_view username;

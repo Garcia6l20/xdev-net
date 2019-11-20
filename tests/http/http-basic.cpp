@@ -2,107 +2,83 @@
 
 #include <net/http_server.hpp>
 #include <net/http_client.hpp>
-#include <net/http_reply.hpp>
 
 #include <iostream>
+#include <fstream>
 
 using namespace std::literals::string_literals;
 using namespace std::literals::chrono_literals;
 using namespace xdev;
 
 struct HttpBasicTest: testing::NetTest {
-    net::address addr{"localhost", 4242};
 };
 
 TEST_F(HttpBasicTest, Nominal) {
-    net::http_server srv;
-    srv("/show_request", [](net::http_server::context& context) {
-        auto req = context.request;
-        std::cout << "path: " << req.path << std::endl;
-        if (!req.headers.empty()) {
-            std::cout << "headers: " << std::endl;
-            for (const auto& [field, value]: req.headers)
-                std::cout << " - " << field << ": " << value << std::endl;
-        }
-        std::cout << "method: " << req.method_str() << std::endl;
-        context.send_reply(net::http_basic_body_reply{"ok"});
+    boost::asio::io_context srvctx;
+    using server_type = net::http::server<>;
+    server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}};
+    srv("/test", [](server_type::context_type& context) -> server_type::route_return_type {
+        net::http::response<net::http::string_body> res{
+            std::piecewise_construct,
+            std::make_tuple("ok"),
+            std::make_tuple(net::http::status::ok, context.request.version())
+        };
+        res.set(net::http::field::content_type, "text/plain");
+        res.content_length(res.body().size());
+        return std::move(res);
     });
-    auto listen_guard = srv.start_listening(addr);
-    ASSERT_EQ("ok", net::http_client::get({"http://localhost:4242/show_request"}).body.string_view());
+
+    auto fut = std::async([&srvctx] {
+        srvctx.run();
+    });
+
+    std::this_thread::sleep_for(500ms);
+
+    boost::asio::io_context ctx;
+    net::error_code ec;
+    net::http::response<net::http::string_body> reply;
+    net::http::client::async_get({"http://localhost:4242/test"}, reply, ctx, ec);
+
+    ctx.run();
+
+    ASSERT_EQ("ok", reply.body());
+
+    srvctx.stop();
 }
 
-TEST_F(HttpBasicTest, NotFount) {
-    net::http_server srv;
-    auto listen_guard = srv.start_listening(addr);
-    ASSERT_EQ(net::http_status::HTTP_STATUS_NOT_FOUND, net::http_client::get({ "http://localhost:4242/test" }).status);
-}
-
-TEST_F(HttpBasicTest, InternalError) {
-    net::http_server srv;
-    srv("/runtime_error", [](net::http_server::context&) {
-        throw std::runtime_error("test");
+TEST(HttpBoostTest, CoroFileRead) {
+    boost::asio::io_context srvctx;
+    using server_type = net::http::server<>;
+    server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}};
+    srv("/get_this_test", [](server_type::context_type& context) -> server_type::route_return_type {
+        net::error_code ec;
+        net::http::response<net::http::file_body> resp;
+        net::http::file_body::value_type file;
+        file.open(__FILE__, boost::beast::file_mode::read, ec);
+        if (ec)
+            throw std::runtime_error(ec.message());
+        resp.body() = std::move(file);
+        return std::move(resp);
     });
-    srv("/undefined_error", [](net::http_server::context&) {
-        throw 0;
+
+    auto fut = std::async([&srvctx] {
+        srvctx.run();
     });
-    auto listen_guard = srv.start_listening(addr);
-    auto reply = net::http_client::get({ "http://localhost:4242/runtime_error" });
-    ASSERT_EQ(net::http_status::HTTP_STATUS_INTERNAL_SERVER_ERROR, reply.status);
-    ASSERT_EQ("test", reply.body.string_view());
-    reply = net::http_client::get({ "http://localhost:4242/undefined_error" });
-    ASSERT_EQ(net::http_status::HTTP_STATUS_INTERNAL_SERVER_ERROR, reply.status);
-    ASSERT_EQ("unknown error", reply.body.string_view());
-}
 
-TEST_F(HttpBasicTest, Add) {
-    net::http_server srv;
-    srv("/add/<a>/<b>", [](double a, double b, net::http_server::context& context) {
-        context.send_reply(net::http_basic_body_reply{std::to_string(a + b)});
-    });
-    auto listen_guard = srv.start_listening(addr);
-    ASSERT_NEAR(42.0, std::stod(std::string(net::http_client::get({"http://localhost:4242/add/20.2/21.8"}).body.string_view())), 0.001);
-}
+    std::this_thread::sleep_for(500ms);
 
-#include <fstream>
-
-struct ifstream_reply: net::http_reply {
-    ifstream_reply(const std::string& filename):
-        _ifs(filename, std::ifstream::in) {
-    }
-
-    // StreamBodyProvider
-    std::istream& body() {
-        return _ifs;
-    }
-
-    // HttpHeadProvider
-    std::string http_head() {
-        std::streampos fsize = 0;
-        fsize = _ifs.tellg();
-        _ifs.seekg(0, std::ios::end);
-        fsize = _ifs.tellg() - fsize;
-        _ifs.seekg(0, std::ios::beg);
-        headers["Content-Length"] = std::to_string(fsize);
-        return http_reply::http_head();
-    }
-private:
-    std::ifstream _ifs;
-};
-
-TEST_F(HttpBasicTest, Stream) {
-    net::http_server srv;
-    srv("/get_this_test", [](net::http_server::context& context) {
-        context.send_reply(ifstream_reply{__FILE__});
-    });
-    auto listen_guard = srv.start_listening(addr);
-    auto reply = net::http_client::get({"http://localhost:4242/get_this_test"});
+    boost::beast::http::response<boost::beast::http::string_body> reply;
+    net::asio::io_context ctx;
+    net::error_code ec;
+    net::http::client::async_get({"http://localhost:4242/get_this_test"}, reply, ctx, ec);
+    ctx.run();
 
     std::streampos fsize = 0;
     std::ifstream file(__FILE__, std::ios::ate);
     fsize = file.tellg();
     file.close();
 
-    std::cout << reply.body.string_view() << std::endl;
-    ASSERT_EQ(net::http_status::HTTP_STATUS_OK, reply.status);
-    ASSERT_EQ(fsize, std::stoll(reply.headers["Content-Length"]));
+    std::cout << reply.body() << std::endl;
+
+    srvctx.stop();
 }
