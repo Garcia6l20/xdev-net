@@ -10,7 +10,7 @@
 #include <net/route_parameter.hpp>
 #include <net/function_traits.hpp>
 
-namespace xdev::net::details {
+namespace xdev::net::http::details {
 
 template <typename ReturnT, typename ContextT, typename T>
 struct view_handler_traits

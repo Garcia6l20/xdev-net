@@ -5,7 +5,7 @@
 using namespace xdev;
 
 TEST(BasicRouterTest, HelloWorld) {
-    net::simple_router r;
+    net::http::simple_router r;
     std::string result;
     bool _friend = false;
     r.add_route("/hello/<who>", [&](std::string who) {
@@ -24,11 +24,11 @@ TEST(BasicRouterTest, HelloWorld) {
     r("/hello/jhon/no");
     ASSERT_EQ(result, "jhon");
     ASSERT_FALSE(_friend);
-    ASSERT_THROW(r("/what"), net::simple_router::not_found);
+    ASSERT_THROW(r("/what"), net::http::simple_router::not_found);
 }
 
 TEST(BasicRouterTest, Add) {
-    net::simple_router r;
+    net::http::simple_router r;
     double result;
     r.add_route("/add/<left>/<right>", [&result](double left, double right) {
         result = left + right;
@@ -43,7 +43,7 @@ struct TestContext {
 
 TEST(BasicRouterTest, Context) {
     TestContext ctx;
-    net::base_router<void, TestContext> r;
+    net::http::base_router<void, TestContext> r;
     r.add_route("/add/<left>/<right>", [](double left, double right, TestContext& ctx) {
         ctx.result = left + right;
     });

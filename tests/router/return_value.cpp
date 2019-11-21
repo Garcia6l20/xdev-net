@@ -5,7 +5,7 @@
 using namespace xdev;
 
 TEST(RouterTest, ReturnValue) {
-    net::base_router<int> r;
+    net::http::base_router<int> r;
     r.add_route("/return/<data>", [](int value) {
         return value;
     });
@@ -13,7 +13,7 @@ TEST(RouterTest, ReturnValue) {
 }
 
 TEST(RouterTest, Add) {
-    net::base_router<int> r;
+    net::http::base_router<int> r;
     r.add_route("/add/<left>/<right>", [](double left, double right) -> int {
         return left + right;
     });
