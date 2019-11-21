@@ -6,7 +6,9 @@
 #include <typeindex>
 #include <tuple>
 #include <regex>
+#include <variant>
 
+#include <net/net.hpp>
 #include <net/route_parameter.hpp>
 #include <net/function_traits.hpp>
 
@@ -64,16 +66,18 @@ struct view_handler_traits<ReturnT, ContextT, ReturnType(ClassType::*)(Args...) 
     template<int type_idx, int match_idx, typename FirstT, typename...ArgsT>
     struct _load_data<type_idx, match_idx, FirstT, ArgsT...> {
         void operator()(data_type& data, const std::smatch& match) {
-            std::get<type_idx>(data) = route_parameter<FirstT>::load(match[match_idx].str());
-            _load_data<type_idx + 1, match_idx + route_parameter<FirstT>::group_count() + 1, ArgsT...>{}(data, match);
+            using ParamT = std::remove_cvref_t<FirstT>;
+            std::get<type_idx>(data) = route_parameter<ParamT>::load(match[match_idx].str());
+            _load_data<type_idx + 1, match_idx + route_parameter<ParamT>::group_count() + 1, ArgsT...>{}(data, match);
         }
     };
 
     template<int type_idx, int match_idx, typename LastT>
     struct _load_data<type_idx, match_idx, LastT> {
         void operator()(data_type& data, const std::smatch& match) {
+            using ParamT = std::remove_cvref_t<LastT>;
             if constexpr (!has_context_last)
-                std::get<type_idx>(data) = route_parameter<LastT>::load(match[match_idx].str());
+                std::get<type_idx>(data) = route_parameter<ParamT>::load(match[match_idx].str());
         }
     };
 
@@ -122,7 +126,7 @@ struct view_handler_traits<ReturnT, ContextT, ReturnType(ClassType::*)(Args...) 
         }
         pattern.replace(static_cast<size_t>(match.position()),
                         static_cast<size_t>(match.length()),
-                        "(" + route_parameter<typename arg<idx>::type>::pattern() + ")");
+                        "(" + route_parameter<typename arg<idx>::clean_type>::pattern() + ")");
     }
 
     template <int idx, typename...ArgsT>
@@ -152,5 +156,14 @@ struct view_handler_traits<ReturnT, ContextT, ReturnType(ClassType::*)(Args...) 
     }
 
 };  // class view_handler_traits
+
+template <typename...BodyTypes>
+struct body_traits {
+    using body_variant = std::variant<BodyTypes...>;
+    using body_value_variant = std::variant<typename BodyTypes::value_type...>;
+    using response_variant = std::variant<response<BodyTypes>...>;
+    using parser_variant = std::variant<request_parser<BodyTypes>...>;
+    using request_variant = std::variant<request<BodyTypes>...>;
+};
 
 }  // namespace xdev::net::details

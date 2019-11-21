@@ -18,5 +18,5 @@ endif()
 
 add_subdirectory(traits)
 add_subdirectory(url)
-add_subdirectory(router)
+# add_subdirectory(router)
 add_subdirectory(http)

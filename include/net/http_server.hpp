@@ -16,18 +16,7 @@ template <typename...BodyTypes>
 class session: public std::enable_shared_from_this<session<BodyTypes...>> {
 public:
 
-    using router_return_type = std::variant<response<string_body>,
-                                            response<file_body>,
-                                            response<dynamic_body>,
-                                            response<BodyTypes>...>;
-    using router_parser_variant = std::variant<request_parser<string_body>,
-                                               request_parser<file_body>,
-                                               request_parser<dynamic_body>,
-                                               request_parser<BodyTypes>...>;
-    using request_variant = std::variant<request<string_body>,
-                                         request<file_body>,
-                                         request<dynamic_body>,
-                                         request<BodyTypes>...>;
+    using body_traits = details::body_traits<string_body, file_body, dynamic_body, BodyTypes...>;
 
     struct context {
         template <typename BodyType = string_body>
@@ -35,11 +24,11 @@ public:
             return std::get<request<BodyType>>(_request_var);
         }
     private:
-        request_variant _request_var;
+        typename body_traits::request_variant _request_var;
         friend class session<BodyTypes...>;
     };
 
-    using router_type = base_router<router_return_type, context, router_parser_variant>;
+    using router_type = base_router<context, string_body, file_body, dynamic_body, BodyTypes...>;
     using router_ptr = std::shared_ptr<router_type>;
 
     bool _close;
@@ -56,32 +45,11 @@ public:
         return msg.need_eof();
     }
 
-    template<class T> struct always_false : std::false_type {};
-
-    struct async_read_request_visitor {
-        beast::tcp_stream& _stream;
-        beast::flat_buffer& _buf;
-        asio::yield_context _yield;
-        error_code& _ec;
-        async_read_request_visitor(beast::tcp_stream& stream, beast::flat_buffer& buf, asio::yield_context yield, error_code& ec):
-            _stream{stream},
-            _buf{buf},
-            _yield{std::move(yield)},
-            _ec{ec} {
-        }
-        template <typename BodyType>
-        request<BodyType> operator()(request_parser<BodyType>& p) {
-            async_read(_stream, _buf, p, _yield[_ec]);
-            return p.release();
-        }
-    };
-
     void read(asio::yield_context yield) {
         auto self {this->shared_from_this()};
         beast::error_code ec;
         beast::flat_buffer buffer;
         context ctx;
-        async_read_request_visitor read_req_visitor{_stream, buffer, yield, ec};
         for (;;) {
             request_parser<empty_body> req0;
             async_read_header(_stream, buffer, req0, yield[ec]);
@@ -90,8 +58,8 @@ public:
                 auto target = req0.get().target();
                 std::string path{target.data(), target.size()};
                 auto route = _router->route_for(path);
-                router_parser_variant parser_var;
-                route.assign_parser(parser_var, req0);
+                typename body_traits::parser_variant parser_var;
+                route.init_route(path, ctx, parser_var, req0);
                 std::visit([this, yield, &ec, &buffer, &ctx](auto&p) mutable {
                     async_read_some(_stream, buffer, p, yield[ec]);
                     ctx._request_var = p.release();
@@ -128,7 +96,8 @@ class server {
     using session_type = session<BodyTypes...>;
 public:
     using context_type = typename session_type::context;
-    using route_return_type = typename session_type::router_return_type;
+    using route_return_type = typename session_type::router_type::return_type;
+    using route_init_return_type = typename session_type::router_type::init_return_type;
 
     server(asio::io_context& ctx, const tcp::endpoint& endpoint):
         _acceptor{ctx, endpoint},
@@ -139,6 +108,11 @@ public:
     template <typename ViewHandlerT>
     void add_route(const std::string&path, ViewHandlerT handler) {
         _router->add_route(path, handler);
+    }
+
+    template <typename BodyInitHandlerT, typename ViewHandlerT>
+    void add_route(const std::string&path, BodyInitHandlerT init_handler, ViewHandlerT handler) {
+        _router->add_route(path, init_handler, handler);
     }
 
 private:

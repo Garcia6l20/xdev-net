@@ -27,7 +27,7 @@ namespace xdev {
 TEST(CustomTypeRouterTest, Nominal) {
     net::http::simple_router r;
     TestType result;
-    auto view = [&](TestType value, net::http::simple_router::context_type&) {
+    auto view = [&](TestType value, net::http::simple_router::context_type&) -> net::http::simple_router::return_type {
         result = value;
     };
     using traits = net::http::details::view_handler_traits<net::http::simple_router::return_type, net::http::simple_router::context_type, decltype(view)>;
