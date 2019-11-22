@@ -13,7 +13,7 @@ using namespace xdev;
 
 TEST(HttpBasicTest, Nominal) {
     boost::asio::io_context srvctx;
-    using server_type = net::http::server<>;
+    using server_type = net::http::plain_server;
     server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}};
     srv.add_route("/test", [](server_type::context_type& context) -> server_type::route_return_type {
         auto request = context.req();
@@ -47,7 +47,7 @@ TEST(HttpBasicTest, Nominal) {
 
 TEST(HttpBasicTest, FileRead) {
     boost::asio::io_context srvctx;
-    using server_type = net::http::server<>;
+    using server_type = net::http::plain_server;
     server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}};
     srv.add_route("/get_this_test", [](server_type::context_type& context) -> server_type::route_return_type {
         net::error_code ec;
@@ -84,7 +84,7 @@ TEST(HttpBasicTest, FileRead) {
 
 TEST(HttpBasicTest, Add) {
     boost::asio::io_context srvctx;
-    using server_type = net::http::server<>;
+    using server_type = net::http::plain_server;
     server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}};
     srv.add_route("/add/<a>/<b>", [](double a, double b, server_type::context_type& context) -> server_type::route_return_type {
         auto request = context.req();
@@ -118,7 +118,7 @@ TEST(HttpBasicTest, Add) {
 
 TEST(HttpBasicTest, FileUpload) {
     boost::asio::io_context srvctx;
-    using server_type = net::http::server<>;
+    using server_type = net::http::plain_server;
     server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}};
     srv.add_route("/upload/<path>", [](const std::filesystem::path& path, server_type::context_type& context) -> server_type::route_init_return_type {
         using namespace std::filesystem;
@@ -271,7 +271,7 @@ struct ro_array_body {
 
 TEST(HttpBasicTest, CustomBody) {
     boost::asio::io_context srvctx;
-    using server_type = net::http::server<>;
+    using server_type = net::http::plain_server;
     server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}};
     srv.add_route("/test", [](server_type::context_type& context) -> server_type::route_return_type {
         auto request = context.req();

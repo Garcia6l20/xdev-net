@@ -8,30 +8,19 @@
 #include <filesystem>
 
 namespace xdev::net::http {
-struct client {
 
-    client(asio::io_context& ioc):
+template <typename Derived>
+class base_client {
+
+    Derived& derived() {
+        return static_cast<Derived&>(*this);
+    }
+
+public:
+
+    base_client(asio::io_context& ioc):
         _ioc{ioc},
-        _resolver{_ioc},
-        _stream{_ioc} {
-    }
-
-    ~client() {
-        if (_connected)
-            _stream.socket().shutdown(tcp::socket::shutdown_both);
-    }
-
-    void connect(url&&url_, asio::yield_context yield, error_code& ec) {
-        _url = std::forward<url>(url_);
-        std::string resolver_service = std::to_string(_url.port());
-        auto const results = _resolver.async_resolve(_url.hostname(), resolver_service, yield[ec]);
-        if(ec)
-            return;
-        _stream.expires_after(std::chrono::seconds(30));
-        _stream.async_connect(results, yield[ec]);
-        if (ec)
-            return;
-        _connected = true;
+        _resolver{_ioc} {
     }
 
     template <typename ResponsetBodyType = beast::http::string_body>
@@ -75,24 +64,60 @@ struct client {
         std::string target = {_url.path().data(), _url.path().size()};
         request.set(http::field::host, _url.hostname());
         request.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
-        http::async_write(_stream, request, yield[ec]);
+        http::async_write(derived().stream(), request, yield[ec]);
         if(ec)
             return;
 
         beast::flat_buffer b;
-        http::async_read(_stream, b, response, yield[ec]);
+        http::async_read(derived().stream(), b, response, yield[ec]);
     }
 
-private:
+protected:
     asio::io_context& _ioc;
     tcp::resolver _resolver;
-    beast::tcp_stream _stream;
     bool _connected = false;
     url _url;
     static const int _http_version = 10;
 
 
 public:
+
+};
+
+class client: public base_client<client> {
+
+    friend class base_client<client>;
+
+    beast::tcp_stream&
+    stream() {
+        return _stream;
+    }
+
+    beast::tcp_stream _stream;
+
+public:
+
+    client(asio::io_context& ioc): base_client(ioc), _stream{_ioc} {}
+
+    ~client() {
+        if (_connected) {
+            error_code ec;
+            _stream.socket().shutdown(tcp::socket::shutdown_both, ec);
+        }
+    }
+
+    void connect(url&&url_, asio::yield_context yield, error_code& ec) {
+        _url = std::forward<url>(url_);
+        std::string resolver_service = std::to_string(_url.port());
+        auto const results = _resolver.async_resolve(_url.hostname(), resolver_service, yield[ec]);
+        if(ec)
+            return;
+        _stream.expires_after(std::chrono::seconds(30));
+        _stream.async_connect(results, yield[ec]);
+        if (ec)
+            return;
+        _connected = true;
+    }
 
     template <typename BodyType = beast::http::string_body>
     static void async_get(url&&url_, beast::http::response<BodyType>& response, asio::io_context& ioc, boost::system::error_code& ec) {
@@ -129,4 +154,82 @@ public:
         });
     }
 };
+
+class ssl_client: public base_client<ssl_client> {
+
+    friend class base_client<ssl_client>;
+
+    beast::ssl_stream<beast::tcp_stream>&
+    stream() {
+        return _stream;
+    }
+
+    ssl::context& _ssl_ctx;
+    beast::ssl_stream<beast::tcp_stream> _stream;
+
+public:
+
+    ssl_client(asio::io_context& ioc, ssl::context& ssl_ctx): base_client(ioc), _ssl_ctx{ssl_ctx}, _stream{_ioc, ssl_ctx} {}
+
+    ~ssl_client() {
+        if (_connected) {
+            error_code ec;
+            beast::get_lowest_layer(_stream).socket().shutdown(tcp::socket::shutdown_both, ec);
+        }
+    }
+
+    void connect(url&&url_, asio::yield_context yield, error_code& ec) {
+        _url = std::forward<url>(url_);
+        std::string resolver_service = std::to_string(_url.port());
+        auto const results = _resolver.async_resolve(_url.hostname(), resolver_service, yield[ec]);
+        if(ec)
+            return;
+        beast::get_lowest_layer(_stream).expires_after(std::chrono::seconds(30));
+        beast::get_lowest_layer(_stream).async_connect(results, yield[ec]);
+        if (ec)
+            return;
+        _stream.async_handshake(ssl::stream_base::client, yield[ec]);
+        if(ec)
+            return;
+        _connected = true;
+    }
+
+    template <typename BodyType = beast::http::string_body>
+    static void async_get(url&&url_, ssl::context& ssl_ctx, beast::http::response<BodyType>& response, asio::io_context& ioc, boost::system::error_code& ec) {
+        asio::spawn(ioc, [&ioc, &ssl_ctx, url = std::forward<url>(url_), &response, &ec](asio::yield_context yield) mutable {
+            ssl_client clt {ioc, ssl_ctx};
+            clt.connect(std::move(url), yield, ec);
+            clt.get(response, yield, ec);
+        });
+    }
+
+    template <typename BodyType = beast::http::string_body>
+    static void async_post(url&&url_, ssl::context& ssl_ctx, std::string&& body, beast::http::response<BodyType>& response, asio::io_context& ioc, boost::system::error_code& ec) {
+        asio::spawn(ioc, [&ioc,
+                    &ssl_ctx,
+                    url = std::forward<url>(url_),
+                    body = std::forward<std::string>(body),
+                    &response,
+                    &ec] (asio::yield_context yield) mutable {
+            ssl_client clt {ioc, ssl_ctx};
+            clt.connect(std::move(url), yield, ec);
+            clt.post(std::forward<std::string>(body), response, yield, ec);
+        });
+    }
+
+    template <typename BodyType = beast::http::string_body>
+    static void async_post(url&&url_, ssl::context& ssl_ctx, const std::filesystem::path& filepath, beast::http::response<BodyType>& response, asio::io_context& ioc, boost::system::error_code& ec) {
+        asio::spawn(ioc, [&ioc,
+                    &ssl_ctx,
+                    url = std::forward<url>(url_),
+                    &filepath,
+                    &response,
+                    &ec] (asio::yield_context yield) mutable {
+            ssl_client clt {ioc, ssl_ctx};
+            clt.connect(std::move(url), yield, ec);
+            clt.post(filepath, response, yield, ec);
+        });
+    }
+};
+
 }  // namespace xdev::net

@@ -49,6 +49,8 @@ target_link_directories(${PROJECT_NAME} PUBLIC ${Boost_LIBRARY_DIR})
 target_link_libraries(${PROJECT_NAME} PUBLIC ${Boost_LIBRARIES})
 add_dependencies(${PROJECT_NAME} boost)
 
+target_link_libraries(${PROJECT_NAME} PUBLIC ssl crypto)
+
 if(WIN32)
   target_link_libraries(${PROJECT_NAME} PUBLIC wsock32 ws2_32 debug msvcrtd)
 endif()

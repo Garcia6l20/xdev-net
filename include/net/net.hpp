@@ -2,6 +2,7 @@
 
 #include <boost/asio.hpp>
 #include <boost/beast.hpp>
+#include <boost/beast/ssl.hpp>
 
 #if !defined(__cpp_concepts)
 # ifdef _WIN32
@@ -16,6 +17,7 @@ namespace xdev::net {
     namespace beast = boost::beast;
     namespace asio = boost::asio;
     namespace ip = boost::asio::ip;
+    namespace ssl = boost::asio::ssl;
     using tcp = ip::tcp;
 
     namespace http {
