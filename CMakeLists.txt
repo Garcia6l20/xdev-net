@@ -30,7 +30,7 @@ include(./CMake/GetBoost.cmake)
 configure_file(include/net/net-config.hpp.in include/net/net-config.hpp @ONLY)
 list(APPEND ${PROJECT_NAME}_EXTRA_INCLUDE_DIR ${PROJECT_BINARY_DIR}/include)
 
-add_library(${PROJECT_NAME} STATIC
+set(${PROJECT_NAME}-headers
     include/net/net.hpp
     include/net/net-config.hpp.in
     ${PROJECT_BINARY_DIR}/include/net/net-config.hpp
@@ -40,9 +40,17 @@ add_library(${PROJECT_NAME} STATIC
     include/net/router.hpp
     include/net/router_details.hpp
     include/net/route_parameter.hpp
+)
 
+add_library(${PROJECT_NAME} STATIC
+    ${${PROJECT_NAME}-headers}
     src/net.cpp
 )
+
+if (${CMAKE_VERSION} VERSION_GREATER_EQUAL 3.16)
+    message(STATUS "Using precompiled headers")
+    target_precompile_headers(${PROJECT_NAME} PUBLIC ${${PROJECT_NAME}-headers})
+endif()
 
 target_include_directories(${PROJECT_NAME} PUBLIC include ${${PROJECT_NAME}_EXTRA_INCLUDE_DIR} ${Boost_INCLUDE_DIR})
 target_link_directories(${PROJECT_NAME} PUBLIC ${Boost_LIBRARY_DIR})
