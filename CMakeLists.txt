@@ -43,6 +43,7 @@ add_library(${PROJECT_NAME} STATIC
 
     src/net.cpp
 )
+
 target_include_directories(${PROJECT_NAME} PUBLIC include ${${PROJECT_NAME}_EXTRA_INCLUDE_DIR} ${Boost_INCLUDE_DIR})
 target_link_directories(${PROJECT_NAME} PUBLIC ${Boost_LIBRARY_DIR})
 target_link_libraries(${PROJECT_NAME} PUBLIC ${Boost_LIBRARIES})
