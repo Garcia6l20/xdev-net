@@ -2,6 +2,11 @@ name: C/C++ CI
 
 on: [push]
 
+env:
+  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
+  BUILD_TYPE: Debug
+
+
 jobs:
   build:
 
@@ -9,11 +14,18 @@ jobs:
     
     steps:
     - uses: actions/checkout@v1
-    - name: configure
-      run: ./configure
-    - name: make
-      run: make
-    - name: make check
-      run: make check
-    - name: make distcheck
-      run: make distcheck
+    - name: Create Build Environment
+      run: cmake -E make_directory ${{runner.workspace}}/build
+    - name: Configure
+      working-directory: ${{runner.workspace}}/build
+      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE
+    - name: Build
+      working-directory: ${{runner.workspace}}/build
+      run: cmake --build .
+    - name: Test
+      working-directory: ${{runner.workspace}}/build
+      run: ctest
+    - name: Leak check
+      working-directory: ${{runner.workspace}}/build
+      run: ctest -T memcheck
+
