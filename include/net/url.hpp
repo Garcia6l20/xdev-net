@@ -30,6 +30,7 @@ namespace xdev::net {
     }
 
     struct url {
+        url() = default;
         url(const std::string& data):
             _data{data} {
             static const std::regex url_exp{R"((\w+):(\/\/[\w:@]+)?(\/[^\?]+)?(\?([^#]+))?(\#\w+)?)"};

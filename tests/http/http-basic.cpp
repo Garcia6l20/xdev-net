@@ -4,6 +4,7 @@
 #include <net/http_client.hpp>
 
 #include <iostream>
+#include <filesystem>
 #include <fstream>
 
 using namespace std::literals::string_literals;
@@ -119,18 +120,22 @@ TEST(HttpBasicTest, FileUpload) {
     boost::asio::io_context srvctx;
     using server_type = net::http::server<>;
     server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}};
-    srv.add_route("/upload/<filename>", [](const std::string& filename, server_type::context_type& context) -> server_type::route_init_return_type {
+    srv.add_route("/upload/<path>", [](const std::filesystem::path& path, server_type::context_type& context) -> server_type::route_init_return_type {
+        using namespace std::filesystem;
         net::error_code ec;
+        if (!exists(path.parent_path())) {
+            create_directories(path.parent_path());
+        }
         net::http::file_body::value_type file;
-        file.open(filename.c_str(), boost::beast::file_mode::write, ec);
+        file.open(path.c_str(), boost::beast::file_mode::write, ec);
         if (ec)
             throw std::runtime_error(ec.message());
         return {net::http::file_body{}, std::move(file)};
-    }, [](const std::string& filename, server_type::context_type& context) -> server_type::route_return_type {
-        auto request = context.req();
+    }, [](const std::filesystem::path& path, server_type::context_type& context) -> server_type::route_return_type {
+        auto& request = context.req<net::http::file_body>();
         net::http::response<net::http::string_body> res{
             std::piecewise_construct,
-            std::make_tuple(filename + " uploaded"),
+            std::make_tuple(path.string() + " uploaded"),
             std::make_tuple(net::http::status::ok, request.version())
         };
         res.set(net::http::field::content_type, "text/plain");
@@ -139,7 +144,11 @@ TEST(HttpBasicTest, FileUpload) {
     });
 
     auto fut = std::async([&srvctx] {
-        srvctx.run();
+        try {
+            srvctx.run();
+        } catch(const std::exception& err) {
+            std::cerr << err.what() << std::endl;
+        }
     });
 
     std::this_thread::sleep_for(500ms);
@@ -147,11 +156,17 @@ TEST(HttpBasicTest, FileUpload) {
     boost::asio::io_context ctx;
     net::error_code ec;
     net::http::response<net::http::string_body> reply;
-    net::http::client::async_get({"http://localhost:4242/upload/test"}, reply, ctx, ec);
+    net::http::client::async_post({"http://localhost:4242/upload/test/test.txt"}, std::string("hello world"), reply, ctx, ec);
 
     ctx.run();
 
-    ASSERT_EQ("test uploaded", reply.body());
+    ASSERT_EQ("test/test.txt uploaded", reply.body());
+
+    std::ifstream t("test/test.txt");
+    std::string str((std::istreambuf_iterator<char>(t)),
+                     std::istreambuf_iterator<char>());
+
+    ASSERT_EQ("hello world", str);
 
     srvctx.stop();
 }

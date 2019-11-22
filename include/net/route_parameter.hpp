@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <string>
+#include <filesystem>
 #include <vector>
 
 namespace xdev::net {
@@ -16,7 +17,18 @@ struct route_parameter<std::string> {
         return input;
     }
     static std::string pattern() {
-        return R"(\w+)";
+        return R"([/]+)";
+    }
+};
+
+template <>
+struct route_parameter<std::filesystem::path> {
+    static constexpr int group_count() { return 0; }
+    static std::filesystem::path load(const std::string& input) {
+        return std::filesystem::path(input.c_str());
+    }
+    static std::string pattern() {
+        return R"(.+)";
     }
 };
 

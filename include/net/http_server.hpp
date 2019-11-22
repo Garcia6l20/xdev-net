@@ -20,7 +20,11 @@ public:
 
     struct context {
         template <typename BodyType = string_body>
-        request<BodyType> req() {
+        const request<BodyType>& req() const {
+            return std::get<request<BodyType>>(_request_var);
+        }
+        template <typename BodyType = string_body>
+        request<BodyType>& req() {
             return std::get<request<BodyType>>(_request_var);
         }
     private:

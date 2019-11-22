@@ -108,12 +108,15 @@ public:
                             if constexpr (std::is_same_v<typename BodyT::value_type, BodyValueT>) {
                                 var.template emplace<request_parser<BodyT>>(std::move(req));
                                 std::get<request_parser<BodyT>>(var).get().body() = std::move(body_value);
-                            } else throw std::runtime_error("Body type mismatch");
+                            } else {
+                                throw std::runtime_error("Body type mismatch");
+                            }
                         }, std::get<1>(init_tup));
                     }, std::get<0>(init_tup));
                 }
+            } else {
+                throw not_matching();
             }
-            throw not_matching();
         }
 
     private:
