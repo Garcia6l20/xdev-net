@@ -1,7 +1,6 @@
 #pragma once
 
-#include <net/net.hpp>
-#include <net/router_details.hpp>
+#include <xdev/net/router_details.hpp>
 
 #include <variant>
 

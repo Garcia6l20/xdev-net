@@ -24,3 +24,6 @@ namespace xdev::net {
         using namespace beast::http;
     }
 }  // namespace xdev::net
+
+#include <xdev/net/http_client.hpp>
+#include <xdev/net/http_server.hpp>

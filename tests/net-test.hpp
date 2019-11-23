@@ -2,7 +2,7 @@
 
 #include <gtest/gtest.h>
 
-#include <net/net.hpp>
+#include <xdev/net.hpp>
 
 namespace testing {
 struct NetTest : testing::Test {

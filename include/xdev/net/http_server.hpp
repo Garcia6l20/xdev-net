@@ -1,7 +1,6 @@
 #pragma once
 
-#include <net/net.hpp>
-#include <net/router.hpp>
+#include <xdev/net/router.hpp>
 
 #include <boost/asio/spawn.hpp>
 

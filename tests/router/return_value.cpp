@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include <net/router.hpp>
+#include <xdev/net/router.hpp>
 
 using namespace xdev;
 

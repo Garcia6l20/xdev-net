@@ -10,41 +10,29 @@ else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fconcepts")
 endif()
 
-project(net)
+project(xdev-net)
 
-macro(make_patch_command _out_command _dir)
-    set(${_out_command} "")
-    file(GLOB _patches ${_dir}/*.patch)
-    foreach (_patch ${_patches})
-        list(APPEND ${_out_command} "git apply ${_patch}")
-    endforeach()
-    list(JOIN ${_out_command} " && " ${_out_command})
-	if (UNIX)
-		file(WRITE ${PROJECT_BINARY_DIR}/${_out_command}.sh ${${_out_command}})
-		set(${_out_command} bash ${PROJECT_BINARY_DIR}/${_out_command}.sh)
-	endif()
-endmacro()
+find_package(Boost 1.71.0 COMPONENTS system coroutine thread REQUIRED)
+find_package(Threads REQUIRED)
 
-include(./CMake/GetBoost.cmake)
-
-configure_file(include/net/net-config.hpp.in include/net/net-config.hpp @ONLY)
-list(APPEND ${PROJECT_NAME}_EXTRA_INCLUDE_DIR ${PROJECT_BINARY_DIR}/include)
+configure_file(include/xdev/net/config.hpp.in ${PROJECT_BINARY_DIR}/include/xdev/net/config.hpp)
 
 set(${PROJECT_NAME}-headers
-    include/net/net.hpp
-    include/net/net-config.hpp.in
-    ${PROJECT_BINARY_DIR}/include/net/net-config.hpp
-    include/net/function_traits.hpp
-    include/net/http_server.hpp
-    include/net/http_client.hpp
-    include/net/router.hpp
-    include/net/router_details.hpp
-    include/net/route_parameter.hpp
+    include/xdev/net.hpp
+    ${PROJECT_BINARY_DIR}/include/xdev/net/config.hpp
+    include/xdev/net/function_traits.hpp
+    include/xdev/net/http_server.hpp
+    include/xdev/net/http_client.hpp
+    include/xdev/net/router.hpp
+    include/xdev/net/router_details.hpp
+    include/xdev/net/route_parameter.hpp
 )
 
 add_library(${PROJECT_NAME} STATIC
     ${${PROJECT_NAME}-headers}
-    src/net.cpp
+
+    include/xdev/net/config.hpp.in
+    src/xdev-net.cpp
 )
 
 if (${CMAKE_VERSION} VERSION_GREATER_EQUAL 3.16)
@@ -53,9 +41,7 @@ if (${CMAKE_VERSION} VERSION_GREATER_EQUAL 3.16)
 endif()
 
 target_include_directories(${PROJECT_NAME} PUBLIC include ${${PROJECT_NAME}_EXTRA_INCLUDE_DIR} ${Boost_INCLUDE_DIR})
-target_link_directories(${PROJECT_NAME} PUBLIC ${Boost_LIBRARY_DIR})
-target_link_libraries(${PROJECT_NAME} PUBLIC ${Boost_LIBRARIES})
-add_dependencies(${PROJECT_NAME} boost)
+target_link_libraries(${PROJECT_NAME} PUBLIC Threads::Threads Boost::headers Boost::system Boost::coroutine Boost::thread)
 
 target_link_libraries(${PROJECT_NAME} PUBLIC ssl crypto)
 
@@ -63,6 +49,9 @@ if(WIN32)
   target_link_libraries(${PROJECT_NAME} PUBLIC wsock32 ws2_32 debug msvcrtd)
 endif()
 
-enable_testing()
-add_subdirectory(tests)
-include(CTest)
+option(XDEV_UNINT_TESTING "Enable unit testing" ON)
+if(XDEV_UNINT_TESTING)
+  enable_testing()
+  add_subdirectory(tests)
+  include(CTest)
+endif()

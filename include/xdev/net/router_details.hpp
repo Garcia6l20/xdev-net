@@ -8,9 +8,8 @@
 #include <regex>
 #include <variant>
 
-#include <net/net.hpp>
-#include <net/route_parameter.hpp>
-#include <net/function_traits.hpp>
+#include <xdev/net/route_parameter.hpp>
+#include <xdev/net/function_traits.hpp>
 
 namespace xdev::net::http::details {
 

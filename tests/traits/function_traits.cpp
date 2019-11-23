@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include <net/function_traits.hpp>
+#include <xdev/net/function_traits.hpp>
 
 #include <iostream>
 

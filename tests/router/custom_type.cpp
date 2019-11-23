@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include <net/router.hpp>
+#include <xdev/net/router.hpp>
 
 using namespace xdev;
 #if 1
@@ -30,7 +30,7 @@ TEST(CustomTypeRouterTest, Nominal) {
     auto view = [&](TestType value, net::http::simple_router::context_type&) -> net::http::simple_router::return_type {
         result = value;
     };
-    using traits = net::http::details::view_handler_traits<net::http::simple_router::return_type, net::http::simple_router::context_type, decltype(view)>;
+    using traits = net::http::details::view_handler_traits<xdev/net::http::simple_router::return_type, net::http::simple_router::context_type, decltype(view)>;
     auto test = net::http::simple_router::context_type();
     static_assert (traits::arity == 2, "");
     static_assert (std::is_same_v<traits::context_type, net::http::simple_router::context_type>, "");

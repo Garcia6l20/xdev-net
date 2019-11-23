@@ -1,7 +1,7 @@
 #include <net-test.hpp>
 
-#include <net/http_server.hpp>
-#include <net/http_client.hpp>
+#include <xdev/net/http_server.hpp>
+#include <xdev/net/http_client.hpp>
 
 #include <iostream>
 #include <filesystem>
@@ -305,4 +305,3 @@ TEST(HttpBasicTest, CustomBody) {
 
     srvctx.stop();
 }
-
