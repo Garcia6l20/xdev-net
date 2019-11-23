@@ -71,3 +71,8 @@ Thumbs.db
 *.dll
 *.exe
 
+test_package/build
+.vs/
+.idea/
+CMakeLists.txt.user
+CMakeSettings.json
