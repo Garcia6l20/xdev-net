@@ -11,15 +11,14 @@ class XDevNetConan(ConanFile):
     topics = ("<Put some tag here>", "<here>", "<and here>")
     settings = "os", "compiler", "build_type", "arch"
     options = {"shared": [True, False]}
-    default_options = "shared=False"
     generators = "cmake_paths"
     scm = {
      "type": "git",  # Use "type": "svn", if local repo is managed using SVN
      "url": "auto",
      "revision": "auto"
     }
-    requires = ("boost/1.71.0@conan/stable")
-    build_requires = ("gtest/1.8.1@bincrafters/stable")
+    requires = ("boost/1.71.0@conan/stable", "openssl/1.0.2s", "zlib/1.2.11")
+    default_options = {"shared": False, "boost:shared": True, "OpenSSL:shared": True}
     exports_sources = "include/*"
     # no_copy_source = True
 

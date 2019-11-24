@@ -100,10 +100,12 @@ load_server_certificate(boost::asio::ssl::context& ctx)
             return "test";
         });
 
+#ifndef BOOST_ASIO_USE_MBEDTLS
     ctx.set_options(
         boost::asio::ssl::context::default_workarounds |
         boost::asio::ssl::context::no_sslv2 |
         boost::asio::ssl::context::single_dh_use);
+#endif
 
     ctx.use_certificate_chain(
         boost::asio::buffer(cert.data(), cert.size()));
@@ -112,8 +114,10 @@ load_server_certificate(boost::asio::ssl::context& ctx)
         boost::asio::buffer(key.data(), key.size()),
         boost::asio::ssl::context::file_format::pem);
 
+#ifndef BOOST_ASIO_USE_MBEDTLS
     ctx.use_tmp_dh(
         boost::asio::buffer(dh.data(), dh.size()));
+#endif
 }
 
 
