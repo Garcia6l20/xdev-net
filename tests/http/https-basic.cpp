@@ -140,11 +140,16 @@ TEST(HttpsBasicTest, Nominal) {
         return res;
     });
 
-    auto fut = std::async([&srvctx] {
+    std::atomic_bool ready = false;;
+
+    auto fut = std::async([&srvctx, &ready] {
+        srvctx.poll_one();
+        ready = true;
         srvctx.run();
     });
 
-    std::this_thread::sleep_for(500ms);
+    while (!ready)
+        std::this_thread::yield();
 
     boost::asio::io_context ctx;
     net::error_code ec;

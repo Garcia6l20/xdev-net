@@ -27,11 +27,16 @@ TEST(HttpBasicTest, Nominal) {
         return res;
     });
 
-    auto fut = std::async([&srvctx] {
+    std::atomic_bool ready = false;;
+
+    auto fut = std::async([&srvctx, &ready] {
+        srvctx.poll_one();
+        ready = true;
         srvctx.run();
     });
 
-    std::this_thread::sleep_for(500ms);
+    while (!ready)
+        std::this_thread::yield();
 
     boost::asio::io_context ctx;
     net::error_code ec;
@@ -51,7 +56,7 @@ TEST(HttpBasicTest, FileRead) {
     server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}};
     srv.on("/get_this_test").complete([](server_type::context_type& context) {
         net::error_code ec;
-        net::http::response<net::http::file_body> resp;
+        auto resp = context.make_response<net::http::file_body>();
         net::http::file_body::value_type file;
         file.open(__FILE__, boost::beast::file_mode::read, ec);
         if (ec)
@@ -60,11 +65,16 @@ TEST(HttpBasicTest, FileRead) {
         return resp;
     });
 
-    auto fut = std::async([&srvctx] {
+    std::atomic_bool ready = false;;
+
+    auto fut = std::async([&srvctx, &ready] {
+        srvctx.poll_one();
+        ready = true;
         srvctx.run();
     });
 
-    std::this_thread::sleep_for(500ms);
+    while (!ready)
+        std::this_thread::yield();
 
     boost::beast::http::response<boost::beast::http::string_body> reply;
     net::asio::io_context ctx;
@@ -87,22 +97,23 @@ TEST(HttpBasicTest, Add) {
     using server_type = net::http::plain_server;
     server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}};
     srv.on("/add/<a>/<b>").complete([](double a, double b, server_type::context_type& context) {
-        auto request = context.req();
-        net::http::response<net::http::string_body> res{
-            std::piecewise_construct,
-            std::make_tuple(std::to_string(a + b)),
-            std::make_tuple(net::http::status::ok, request.version())
-        };
-        res.set(net::http::field::content_type, "text/plain");
-        res.content_length(res.body().size());
-        return res;
+        auto response = context.make_response();
+        response.body() = std::to_string(a + b);
+        response.set(net::http::field::content_type, "text/plain");
+        response.content_length(response.body().size());
+        return response;
     });
 
-    auto fut = std::async([&srvctx] {
+    std::atomic_bool ready = false;;
+
+    auto fut = std::async([&srvctx, &ready] {
+        srvctx.poll_one();
+        ready = true;
         srvctx.run();
     });
 
-    std::this_thread::sleep_for(500ms);
+    while (!ready)
+        std::this_thread::yield();
 
     boost::asio::io_context ctx;
     net::error_code ec;
@@ -131,26 +142,23 @@ TEST(HttpBasicTest, FileUpload) {
             throw std::runtime_error(ec.message());
         return file;
     }).complete([](const std::filesystem::path& path, server_type::context_type& context) {
-        auto& request = context.req<net::http::file_body>();
-        net::http::response<net::http::string_body> res{
-            std::piecewise_construct,
-            std::make_tuple(path.string() + " uploaded"),
-            std::make_tuple(net::http::status::ok, request.version())
-        };
-        res.set(net::http::field::content_type, "text/plain");
-        res.content_length(res.body().size());
-        return res;
+        auto response = context.make_response();
+        response.body() = path.string() + " uploaded";
+        response.set(net::http::field::content_type, "text/plain");
+        response.content_length(response.body().size());
+        return response;
     });
 
-    auto fut = std::async([&srvctx] {
-        try {
-            srvctx.run();
-        } catch(const std::exception& err) {
-            std::cerr << err.what() << std::endl;
-        }
+    std::atomic_bool ready = false;;
+
+    auto fut = std::async([&srvctx, &ready] {
+        srvctx.poll_one();
+        ready = true;
+        srvctx.run();
     });
 
-    std::this_thread::sleep_for(500ms);
+    while (!ready)
+        std::this_thread::yield();
 
     boost::asio::io_context ctx;
     net::error_code ec;
@@ -273,22 +281,24 @@ TEST(HttpBasicTest, CustomBody) {
     using server_type = net::http::plain_server;
     server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}};
     srv.on("/test").complete([](server_type::context_type& context) {
-        auto request = context.req();
-        net::http::response<net::http::string_body> res{
-            std::piecewise_construct,
-            std::make_tuple("ok"),
-            std::make_tuple(net::http::status::ok, request.version())
-        };
-        res.set(net::http::field::content_type, "text/plain");
-        res.content_length(res.body().size());
-        return res;
+        auto response = context.make_response();
+        response.body() = "ok";
+        response.set(net::http::field::content_type, "text/plain");
+        response.content_length(response.body().size());
+        return response;
     });
 
-    auto fut = std::async([&srvctx] {
+    std::atomic_bool ready = false;;
+
+    auto fut = std::async([&srvctx, &ready] {
+        srvctx.poll_one();
+        ready = true;
         srvctx.run();
     });
 
-    std::this_thread::sleep_for(500ms);
+    while (!ready)
+        std::this_thread::yield();
+
 
     boost::asio::io_context ctx;
     net::error_code ec;

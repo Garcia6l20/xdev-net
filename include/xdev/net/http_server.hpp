@@ -29,6 +29,22 @@ public:
         request<BodyType>& req() {
             return std::get<request<BodyType>>(_request_var);
         }
+        template <typename BodyType = string_body, typename...Args>
+        response<BodyType> make_response(Args&&...args) {
+            return std::visit([...args = std::forward<Args>(args)](auto&&request) {
+                if constexpr (sizeof...(args) == 0) {
+                    return net::http::response<BodyType> {
+                        http::status::ok, request.version()
+                    };
+                } else {
+                    net::http::response<BodyType> response {
+                        std::forward<Args>(args)...
+                    };
+                    response.version(request.version());
+                    return std::move(response);
+                }
+            }, _request_var);
+        }
     private:
         typename body_traits::request_variant _request_var;
         friend class session<Derived, BodyTypes...>;
