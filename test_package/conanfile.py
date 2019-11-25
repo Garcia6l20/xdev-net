@@ -6,6 +6,7 @@ from conans import ConanFile, CMake, tools
 class XDevNetTestConan(ConanFile):
     settings = "os", "compiler", "build_type", "arch"
     generators = "cmake"
+    requires = ("xdev-net/0.1.1")
 
     def build(self):
         cmake = CMake(self)
@@ -22,4 +23,4 @@ class XDevNetTestConan(ConanFile):
     def test(self):
         if not tools.cross_building(self.settings):
             os.chdir("bin")
-            self.run(".%sexample" % os.sep)
+            self.run(".%sconan-test" % os.sep)

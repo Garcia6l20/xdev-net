@@ -1,7 +1,6 @@
 #pragma once
 
-#include <boost/beast/http/file_body.hpp>
-#include <boost/beast/core/file.hpp>
+#include <xdev/net.hpp>
 
 #include <xdev/net/router.hpp>
 
@@ -98,15 +97,25 @@ public:
                     }, ctx._request_var);
                     send(std::move(resp), yield, ec);
                 }, route(match, ctx));
-                if (_close || ec)
-                    break;
             } catch(const typename router_type::not_found&) {
-                response<string_body> res {
+                response<string_body> resp {
                     std::piecewise_construct,
                     std::make_tuple("not found"),
-                    std::make_tuple(net::http::status::not_found, 10)
+                    std::make_tuple(net::http::status::not_found, req0.get().version())
                 };
+                send(std::move(resp), yield, ec);
+                _close = true;
+            } catch(const std::exception& err) {
+                response<string_body> resp {
+                    std::piecewise_construct,
+                    std::make_tuple(err.what()),
+                    std::make_tuple(net::http::status::internal_server_error, req0.get().version())
+                };
+                send(std::move(resp), yield, ec);
+                _close = true;
             }
+            if (_close || ec)
+                break;
         }
         derived().do_eof();
     }

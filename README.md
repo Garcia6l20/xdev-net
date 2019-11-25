@@ -4,6 +4,8 @@
 
 ## Simple example
 
+
+The following code:
 ```cpp
 using namespace xdev;
 
@@ -33,7 +35,26 @@ srv.on("/add/<a>/<b>").complete([](double a, double b, server_type::context_type
 });
 
 ctx.run();
+```
 
+Produces:
+```bash
+curl -v http://localhost:4242/add/30.2/11.8
+*   Trying 127.0.0.1:4242...
+* TCP_NODELAY set
+* Connected to localhost (127.0.0.1) port 4242 (#0)
+> GET /add/30.2/11.8 HTTP/1.1
+> Host: localhost:4242
+> User-Agent: curl/7.65.3
+> Accept: */*
+>
+* Mark bundle as not supporting multiuse
+< HTTP/1.1 200 OK
+< Content-Type: text/plain
+< Content-Length: 9
+<
+* Connection #0 to host localhost left intact
+42.000000
 ```
 
 ## Development

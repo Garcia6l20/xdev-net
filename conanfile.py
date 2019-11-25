@@ -3,7 +3,7 @@ from conans import ConanFile, CMake, tools
 
 class XDevNetConan(ConanFile):
     name = "xdev-net"
-    version = "0.1.0"
+    version = "0.1.1"
     license = "MIT"
     author = "Garcia Sylvain <garcia dot 6l20 at gmail dot com>"
     url = "https://github.com/Garcia6l20/xdev-net"

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <xdev/net.hpp>
+
 #include <xdev/net/url.hpp>
 
 #include <boost/asio/spawn.hpp>

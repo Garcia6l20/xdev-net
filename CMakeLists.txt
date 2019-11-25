@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.14)
 # available options
 option(XDEV_UNIT_TESTING "Enable unit testing" ON)
 option(XDEV_USE_MBEDTLS "Enable mbedtls ssl backend" OFF)
+option(XDEV_NET_BUILD_SAMPLES "Build samples" OFF)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
@@ -75,4 +76,8 @@ if(XDEV_UNIT_TESTING)
   enable_testing()
   add_subdirectory(tests)
   include(CTest)
+endif()
+
+if(XDEV_NET_BUILD_SAMPLES)
+	add_subdirectory(samples)
 endif()
