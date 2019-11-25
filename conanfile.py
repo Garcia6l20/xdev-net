@@ -3,12 +3,12 @@ from conans import ConanFile, CMake, tools
 
 class XDevNetConan(ConanFile):
     name = "xdev-net"
-    version = "0.1"
-    license = "<Put the package license here>"
-    author = "<Put your name here> <And your email here>"
-    url = "<Package recipe repository url here, for issues about the package>"
-    description = "<Description of Xdevnet here>"
-    topics = ("<Put some tag here>", "<here>", "<and here>")
+    version = "0.1.0"
+    license = "MIT"
+    author = "Garcia Sylvain <garcia dot 6l20 at gmail dot com>"
+    url = "https://github.com/Garcia6l20/xdev-net"
+    description = "Boost.Beast based http client/server"
+    topics = ("networking", "http", "boost")
     settings = "os", "compiler", "build_type", "arch"
     options = {"shared": [True, False]}
     generators = "cmake_paths"
@@ -22,17 +22,16 @@ class XDevNetConan(ConanFile):
     exports_sources = "include/*"
     # no_copy_source = True
 
-    def config(self):
-        self.settings.compiler.cppstd = '20'
-
     def build(self):
         cmake = CMake(self)
 
-        cmake.definitions["XDEV_UNINT_TESTING"] = "On" if tools.get_env("CONAN_RUN_TESTS", False) else "Off"
+        run_tests = tools.get_env("CONAN_RUN_TESTS", False)
+
+        cmake.definitions["XDEV_UNIT_TESTING"] = "ON" if run_tests else "OFF"
 
         cmake.configure()
         cmake.build()
-        if tools.get_env("CONAN_RUN_TESTS", False):
+        if run_tests:
             cmake.test()
 
     def package(self):

@@ -19,5 +19,5 @@ make
 This implies using -std=c++20
 
 ```bash
-conan create . -s compiler.cppstd=20 xdev-net/latest
+conan create . -s compiler.cppstd=20
 ```

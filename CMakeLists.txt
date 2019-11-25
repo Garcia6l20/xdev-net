@@ -16,7 +16,7 @@ endif()
 
 project(xdev-net)
 
-option(BOOST_MBEDED "Embed boost with ExternalProject" ON)
+option(BOOST_MBEDED "Embed boost with ExternalProject" OFF)
 if (BOOST_MBEDED)
     message("Using embeded boost")
     include(./CMake/GetBoost.cmake)
