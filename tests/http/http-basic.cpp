@@ -15,7 +15,7 @@ TEST(HttpBasicTest, Nominal) {
     boost::asio::io_context srvctx;
     using server_type = net::http::plain_server;
     server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}};
-    srv.add_route("/test", [](server_type::context_type& context) -> server_type::route_return_type {
+    srv.on("/test").complete([](server_type::context_type& context) -> server_type::route_return_type {
         auto request = context.req();
         net::http::response<net::http::string_body> res{
             std::piecewise_construct,
@@ -49,7 +49,7 @@ TEST(HttpBasicTest, FileRead) {
     boost::asio::io_context srvctx;
     using server_type = net::http::plain_server;
     server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}};
-    srv.add_route("/get_this_test", [](server_type::context_type& context) -> server_type::route_return_type {
+    srv.on("/get_this_test").complete([](server_type::context_type& context) -> server_type::route_return_type {
         net::error_code ec;
         net::http::response<net::http::file_body> resp;
         net::http::file_body::value_type file;
@@ -86,7 +86,7 @@ TEST(HttpBasicTest, Add) {
     boost::asio::io_context srvctx;
     using server_type = net::http::plain_server;
     server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}};
-    srv.add_route("/add/<a>/<b>", [](double a, double b, server_type::context_type& context) -> server_type::route_return_type {
+    srv.on("/add/<a>/<b>").complete([](double a, double b, server_type::context_type& context) -> server_type::route_return_type {
         auto request = context.req();
         net::http::response<net::http::string_body> res{
             std::piecewise_construct,
@@ -120,7 +120,7 @@ TEST(HttpBasicTest, FileUpload) {
     boost::asio::io_context srvctx;
     using server_type = net::http::plain_server;
     server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}};
-    srv.add_route("/upload/<path>", [](const std::filesystem::path& path, server_type::context_type& context) -> server_type::route_init_return_type {
+    srv.on("/upload/<path>").init([](const std::filesystem::path& path, server_type::context_type& context) -> server_type::route_init_return_type {
         boost::system::error_code ec;
         if (!std::filesystem::exists(path.parent_path())) {
             std::filesystem::create_directories(path.parent_path());
@@ -130,7 +130,7 @@ TEST(HttpBasicTest, FileUpload) {
         if (ec)
             throw std::runtime_error(ec.message());
         return {net::http::file_body{}, std::move(file)};
-    }, [](const std::filesystem::path& path, server_type::context_type& context) -> server_type::route_return_type {
+    }).complete([](const std::filesystem::path& path, server_type::context_type& context) -> server_type::route_return_type {
         auto& request = context.req<net::http::file_body>();
         net::http::response<net::http::string_body> res{
             std::piecewise_construct,
@@ -272,7 +272,7 @@ TEST(HttpBasicTest, CustomBody) {
     boost::asio::io_context srvctx;
     using server_type = net::http::plain_server;
     server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}};
-    srv.add_route("/test", [](server_type::context_type& context) -> server_type::route_return_type {
+    srv.on("/test").complete([](server_type::context_type& context) -> server_type::route_return_type {
         auto request = context.req();
         net::http::response<net::http::string_body> res{
             std::piecewise_construct,

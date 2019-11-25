@@ -59,9 +59,11 @@ public:
             try {
                 auto target = req0.get().target();
                 std::string path{target.data(), target.size()};
-                auto route = _router->route_for(path);
+                auto route_data = _router->route_for(path);
+                auto& route = std::get<0>(route_data);
+                auto match = std::move(std::get<1>(route_data));
                 typename body_traits::parser_variant parser_var;
-                route.init_route(path, ctx, parser_var, req0);
+                route.init_route(match, ctx, parser_var, req0);
                 std::visit([this, yield, &ec, &buffer, &ctx](auto&p) mutable {
                     async_read_some(derived().stream(), buffer, p, yield[ec]);
                     ctx._request_var = p.release();
@@ -76,7 +78,7 @@ public:
                         resp.keep_alive(request.keep_alive());
                     }, ctx._request_var);
                     send(std::move(resp), yield, ec);
-                }, route(path, ctx));
+                }, route(match, ctx));
                 if (_close || ec)
                     break;
             } catch(const typename router_type::not_found&) {
@@ -190,11 +192,12 @@ struct session_wrap<false, BodyTypes...> {
 
 template <bool _use_ssl, typename...BodyTypes>
 class server {
-    using session_type = typename session_wrap<_use_ssl, BodyTypes...>::type;
 public:
+    using session_type = typename session_wrap<_use_ssl, BodyTypes...>::type;
+    using router_type = typename session_type::router_type;
     using context_type = typename session_type::context;
-    using route_return_type = typename session_type::router_type::return_type;
-    using route_init_return_type = typename session_type::router_type::init_return_type;
+    using route_return_type = typename router_type::return_type;
+    using route_init_return_type = typename router_type::init_return_type;
 
     server(asio::io_context& ctx, const tcp::endpoint& endpoint):
         _acceptor{ctx, endpoint},
@@ -206,14 +209,8 @@ public:
     server(asio::io_context& ctx, const tcp::endpoint& endpoint, ssl::context& ssl_context) requires(_use_ssl):
         server(ctx, endpoint) { _ssl_context = &ssl_context; }
 
-    template <typename ViewHandlerT>
-    void add_route(const std::string&path, ViewHandlerT handler) {
-        _router->add_route(path, handler);
-    }
-
-    template <typename BodyInitHandlerT, typename ViewHandlerT>
-    void add_route(const std::string&path, BodyInitHandlerT init_handler, ViewHandlerT handler) {
-        _router->add_route(path, init_handler, handler);
+    auto& on(const std::string&path) {
+        return _router->add_route(path);
     }
 
 private:

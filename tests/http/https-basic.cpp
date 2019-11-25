@@ -128,7 +128,7 @@ TEST(HttpsBasicTest, Nominal) {
     net::ssl::context ssl_ctx{net::ssl::context::tlsv12};
     load_server_certificate(ssl_ctx);
     server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}, ssl_ctx};
-    srv.add_route("/test", [](server_type::context_type& context) -> server_type::route_return_type {
+    srv.on("/test").complete([](server_type::context_type& context) -> server_type::route_return_type {
         auto request = context.req();
         net::http::response<net::http::string_body> res{
             std::piecewise_construct,

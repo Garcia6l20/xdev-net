@@ -18,7 +18,7 @@ class XDevNetConan(ConanFile):
      "revision": "auto"
     }
     requires = ("boost/1.71.0@conan/stable", "openssl/1.0.2s", "zlib/1.2.11")
-    default_options = {"shared": False, "boost:shared": True, "OpenSSL:shared": True}
+    default_options = {"shared": False, "boost:shared": False, "OpenSSL:shared": False}
     exports_sources = "include/*"
     # no_copy_source = True
 

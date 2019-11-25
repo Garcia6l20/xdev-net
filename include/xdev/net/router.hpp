@@ -28,19 +28,6 @@ public:
 
     using request_parser_assign_func = std::function<void(parser_type&, request_parser<empty_body>&)>;
 
-    template <typename ViewHandler, typename UpstreamBodyType = string_body>
-    void add_route(const std::string& path, ViewHandler view_handler) {
-        request_parser_assign_func pc = [](parser_type& var, request_parser<empty_body>&req) {
-            var.template emplace<request_parser<UpstreamBodyType>>(std::move(req));
-        };
-        _routes.push_back({path, view_handler, pc});
-    }
-
-    template <typename InitHandler, typename ViewHandler>
-    void add_route(const std::string& path, InitHandler init_handler, ViewHandler view_handler) {
-        _routes.push_back({path, init_handler, view_handler});
-    }
-
     struct route {
         using handler_type = std::function<return_type(std::smatch, RouterContextT&)>;
         using init_handler_type = std::function<init_return_type(std::smatch, RouterContextT&)>;
@@ -49,100 +36,103 @@ public:
         };
 
         static void escape(std::string& input) {
-            std::regex special_chars { R"([.])" };
+            std::regex special_chars { R"([-[\]{}()*+?.,\^$|#\s])" };
             std::regex_replace(input, special_chars, R"(\$&)");
         }
 
-        template <typename ViewHandler>
-        route(const std::string& path, ViewHandler handler, request_parser_assign_func assign_parser = nullptr):
-            _assign_parser{assign_parser} {
-            using traits = details::view_handler_traits<return_type, RouterContextT, ViewHandler>;
-            std::string path_regex = path;
-            escape(path_regex);
-            std::smatch match;
-            _regex = traits::make_regex(path);
+        route(const std::string& path):
+            _path {path},
+            _path_escaped {path} {
+            escape(_path_escaped);
+        }
+
+        route(route&&) = default;
+        route& operator=(route&&) = default;
+
+        route(const route&) = delete ;
+        route& operator=(const route&) = delete;
+
+        template <typename HandlerT>
+        route& init(HandlerT handler) {
+            if (_handler) {
+                throw std::logic_error("init must be called() before complete()");
+            }
+            using traits = details::view_handler_traits<init_return_type, RouterContextT, HandlerT>;
+            auto data = std::make_shared<typename traits::data_type>();
+            _init_handler = [this, data, handler](const std::smatch& match, RouterContextT& ctx) {
+                traits::load_data(match, *data);
+                return traits::invoke(handler, *data, ctx);
+            };
+            return *this;
+        }
+
+        template <typename HandlerT, typename UpstreamBodyType = string_body>
+        route& complete(HandlerT handler) {
+            using traits = details::view_handler_traits<return_type, RouterContextT, HandlerT>;
+            if (!_init_handler) {
+                // create default parser assigner
+                _assign_parser = [](parser_type& var, request_parser<empty_body>&req) {
+                    var.template emplace<request_parser<UpstreamBodyType>>(std::move(req));
+                };
+            }
+            _regex = traits::make_regex(_path_escaped);
             auto data = std::make_shared<typename traits::data_type>();
             _handler = [this, data, handler](const std::smatch& match, RouterContextT& ctx) {
                 traits::load_data(match, *data);
                 return traits::invoke(handler, *data, ctx);
             };
-        }
-        template <typename InitHandler, typename ViewHandler>
-        route(const std::string& path, InitHandler init_handler, ViewHandler handler):
-            route(path, handler) {
-            using traits = details::view_handler_traits<init_return_type, RouterContextT, InitHandler>;
-            auto data = std::make_shared<typename traits::data_type>();
-            _init_handler = [this, data, init_handler](const std::smatch& match, RouterContextT& ctx) {
-                traits::load_data(match, *data);
-                return traits::invoke(init_handler, *data, ctx);
-            };
+            return *this;
         }
 
-        bool operator()(const std::string& url) {
-            return std::regex_match(url, _regex);
-        }
-
-        return_type operator()(const std::string& url, RouterContextT& ctx) {
+        std::tuple<bool, std::smatch> operator()(const std::string& url) {
             std::smatch match;
-            if (std::regex_match(url, match, _regex)) {
-                return _handler(match, ctx);
-            }
-            throw not_matching();
+            return {std::regex_match(url, match, _regex), std::move(match)};
         }
 
-        void init_route(const std::string& url, RouterContextT& ctx, parser_type& var, request_parser<empty_body>&req) {
-            std::smatch match;
-            if (std::regex_match(url, match, _regex)) {
-                if (!_init_handler) {
-                    _assign_parser(var, req);
-                    return;
-                } else {
-                    using parser_variant = typename body_traits::parser_variant;
-                    using body_value_variant = typename body_traits::body_value_variant;
-                    auto init_tup = _init_handler(match, ctx);
-                    std::visit([this,&var,&req, &init_tup](auto&body) {
-                        std::visit([this,&var,&req, &body](auto&&body_value) {
-                            using BodyT = std::decay_t<decltype(body)>;
-                            using BodyValueT = std::decay_t<decltype(body_value)>;
-                            if constexpr (std::is_same_v<typename BodyT::value_type, BodyValueT>) {
-                                var.template emplace<request_parser<BodyT>>(std::move(req));
-                                std::get<request_parser<BodyT>>(var).get().body() = std::move(body_value);
-                            } else {
-                                throw std::runtime_error("Body type mismatch");
-                            }
-                        }, std::get<1>(init_tup));
-                    }, std::get<0>(init_tup));
-                }
+        return_type operator()(const std::smatch& match, RouterContextT& ctx) {
+            return _handler(match, ctx);
+        }
+
+        void init_route(const std::smatch& match, RouterContextT& ctx, parser_type& var, request_parser<empty_body>&req) {
+            if (!_init_handler) {
+                _assign_parser(var, req);
+                return;
             } else {
-                throw not_matching();
+                using parser_variant = typename body_traits::parser_variant;
+                using body_value_variant = typename body_traits::body_value_variant;
+                auto init_tup = _init_handler(match, ctx);
+                std::visit([this,&var,&req, &init_tup](auto&body) {
+                    std::visit([this,&var,&req, &body](auto&&body_value) {
+                        using BodyT = std::decay_t<decltype(body)>;
+                        using BodyValueT = std::decay_t<decltype(body_value)>;
+                        if constexpr (std::is_same_v<typename BodyT::value_type, BodyValueT>) {
+                            var.template emplace<request_parser<BodyT>>(std::move(req));
+                            std::get<request_parser<BodyT>>(var).get().body() = std::move(body_value);
+                        } else {
+                            throw std::runtime_error("Body type mismatch");
+                        }
+                    }, std::get<1>(init_tup));
+                }, std::get<0>(init_tup));
             }
         }
 
     private:
-
+        std::string _path, _path_escaped;
         request_parser_assign_func _assign_parser;
         std::regex _regex;
         handler_type _handler;
         init_handler_type _init_handler;
     };
 
-    const route& route_for(const std::string& url) {
-        for (auto& route: _routes) {
-            if (route(url))
-                return route;
-        }
-        throw not_found();
+    route& add_route(const std::string& path) {
+        return _routes.emplace_back(path);
     }
 
-    return_type operator()(const std::string& url) {
-        RouterContextT ctx{};
-        return operator()(url, ctx);
-    }
-    return_type operator()(const std::string& url, RouterContextT& ctx) {
+    std::tuple<route&, std::smatch> route_for(const std::string& url) {
         for (auto& route: _routes) {
-            try {
-                return route(url, ctx);
-            } catch (const typename route::not_matching&) {}
+            auto res = route(url);
+            if (std::get<0>(res))
+                return {route, std::move(std::get<1>(res))};
         }
         throw not_found();
     }
