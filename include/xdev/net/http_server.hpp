@@ -8,6 +8,7 @@
 
 #include <functional>
 #include <variant>
+#include <iostream>
 
 namespace xdev::net {
 
@@ -72,6 +73,28 @@ public:
         context ctx;
         for (;;) {
             request_parser<empty_body> req0;
+            chunk_extensions ce;
+            std::string chunk;
+            auto chunk_header_cb = [&](std::uint64_t size, boost::string_view extensions, error_code&ec) mutable {
+                std::cout << "on_chunk_header: " << extensions << std::endl;
+                ce.parse(extensions, ec);
+                if (ec)
+                    return;
+                if (size > std::numeric_limits<std::size_t>::max()) {
+                    ec = error::body_limit;
+                }
+                chunk.reserve(size);
+                chunk.clear();
+            };
+            auto chunk_body_cb = [&](std::uint64_t remain, boost::string_view body, error_code&ec) mutable {
+                std::cout << "on_chunk_body: " << body << std::endl;
+                if (remain == body.size())
+                    ec = error::end_of_chunk;
+                chunk.append(body.data(), body.size());
+                return body.size();
+            };
+            req0.on_chunk_header(chunk_header_cb);
+            req0.on_chunk_body(chunk_body_cb);
             async_read_header(derived().stream(), buffer, req0, yield[ec]);
             // get associated route
             try {
@@ -82,8 +105,24 @@ public:
                 auto match = std::move(std::get<1>(route_data));
                 typename body_traits::parser_variant parser_var;
                 route.init_route(match, ctx, parser_var, req0);
-                std::visit([this, yield, &ec, &buffer, &ctx](auto&p) mutable {
+                std::visit([this, yield, &ec, &buffer, &ctx, &chunk_header_cb, &chunk_body_cb, &ce](auto&p) mutable {
+                    p.on_chunk_header(chunk_header_cb);
+                    p.on_chunk_body(chunk_body_cb);
                     async_read_some(derived().stream(), buffer, p, yield[ec]);
+                    if(ec != error::end_of_chunk)
+                        throw std::runtime_error(ec.message());
+                    else
+                        ec.assign(0, ec.category());
+                    // We got a whole chunk, print the extensions:
+                    for(auto const& extension : ce)
+                    {
+                        std::cout << "Extension: " << std::get<0>(extension);
+                        if(! std::get<1>(extension).empty())
+                            std::cout << " = " << std::get<1>(extension) << std::endl;
+                        else
+                            std::cout << std::endl;
+                    }
+
                     ctx._request_var = p.release();
                 }, parser_var);
                 if (ec == http::error::end_of_stream)
