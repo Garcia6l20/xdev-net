@@ -202,6 +202,7 @@ public:
         _ssl_context{nullptr} {
         asio::spawn(ctx, std::bind(&server::_accept, this, std::placeholders::_1));
     }
+
     server(asio::io_context& ctx, const tcp::endpoint& endpoint, ssl::context& ssl_context) requires(_use_ssl):
         server(ctx, endpoint) { _ssl_context = &ssl_context; }
 

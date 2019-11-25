@@ -1,14 +1,14 @@
 cmake_minimum_required(VERSION 3.14)
 
 # available options
-option(XDEV_UNINT_TESTING "Enable unit testing" ON)
-option(XDEV_USE_MBEDTLS "Enable mbedtls ssl backend" ON)
+option(XDEV_UNIT_TESTING "Enable unit testing" ON)
+option(XDEV_USE_MBEDTLS "Enable mbedtls ssl backend" OFF)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 
 if(WIN32)
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /EHsc /std:c++latest")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /EHsc /std:c++latest /bigobj")
 	set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
 else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fconcepts")
@@ -21,7 +21,7 @@ if (BOOST_MBEDED)
     message("Using embeded boost")
     include(./CMake/GetBoost.cmake)
 else()
-    set(Boost_USE_STATIC_LIBS OFF)
+    set(Boost_USE_STATIC_LIBS ON)
     find_package(Boost 1.71.0 COMPONENTS system coroutine thread date_time REQUIRED)
 endif()
 
@@ -61,7 +61,7 @@ if(XDEV_USE_MBEDTLS)
     set(MBEDTLS_LIBRARIES mbedtls mbedcrypto mbedx509)
 endif()
 
-target_include_directories(${PROJECT_NAME} PUBLIC include ${${PROJECT_NAME}_EXTRA_INCLUDE_DIR} ${Boost_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIRS})
+target_include_directories(${PROJECT_NAME} PUBLIC include ${${PROJECT_NAME}_EXTRA_INCLUDE_DIR} ${Boost_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
 target_link_directories(${PROJECT_NAME} PUBLIC ${Boost_LIBRARY_DIRS})
 target_link_libraries(${PROJECT_NAME} PUBLIC Threads::Threads ${Boost_LIBRARIES} ${OPENSSL_LIBRARIES} ${MBEDTLS_LIBRARIES})
 
@@ -69,7 +69,7 @@ if(WIN32)
   target_link_libraries(${PROJECT_NAME} PUBLIC wsock32 ws2_32 debug msvcrtd)
 endif()
 
-if(XDEV_UNINT_TESTING)
+if(XDEV_UNIT_TESTING)
   enable_testing()
   add_subdirectory(tests)
   include(CTest)

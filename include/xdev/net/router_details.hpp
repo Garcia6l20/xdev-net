@@ -33,6 +33,9 @@ struct view_handler_traits<ReturnT, ContextT, ReturnType(ClassType::*)(Args...) 
 
     using context_type = ContextT;
 
+    static constexpr bool has_context_last = std::is_same<typename arg<arity - 1>::clean_type, context_type>::value;
+    //static_assert (has_context_last, "");
+
     template <typename FirstT, typename...RestT>
     static constexpr auto __make_tuple() {
         if constexpr (!sizeof...(RestT)){
@@ -56,8 +59,6 @@ struct view_handler_traits<ReturnT, ContextT, ReturnType(ClassType::*)(Args...) 
 
     using data_type = std::invoke_result_t<_make_tuple>;
 
-    static constexpr bool has_context_last = std::is_same<typename arg<arity - 1>::clean_type, context_type>::value;
-    //static_assert (has_context_last, "");
 
     template<int idx, int match_idx, typename...ArgsT>
     struct _load_data;

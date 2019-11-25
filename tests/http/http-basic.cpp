@@ -121,13 +121,12 @@ TEST(HttpBasicTest, FileUpload) {
     using server_type = net::http::plain_server;
     server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}};
     srv.add_route("/upload/<path>", [](const std::filesystem::path& path, server_type::context_type& context) -> server_type::route_init_return_type {
-        using namespace std::filesystem;
-        net::error_code ec;
-        if (!exists(path.parent_path())) {
-            create_directories(path.parent_path());
+        boost::system::error_code ec;
+        if (!std::filesystem::exists(path.parent_path())) {
+            std::filesystem::create_directories(path.parent_path());
         }
         net::http::file_body::value_type file;
-        file.open(path.c_str(), boost::beast::file_mode::write, ec);
+        file.open(path.string().c_str(), boost::beast::file_mode::write, ec);
         if (ec)
             throw std::runtime_error(ec.message());
         return {net::http::file_body{}, std::move(file)};
