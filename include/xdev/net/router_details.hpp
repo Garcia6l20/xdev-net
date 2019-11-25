@@ -29,7 +29,7 @@ struct view_handler_traits<ReturnT, ContextT, ReturnType(ClassType::*)(Args...) 
     template <size_t idx>
     using arg = typename traits::template arg<idx>;
 
-    static_assert (std::is_same<ReturnT, ReturnType>::value, "Bad route return type");
+    // static_assert (std::is_same<ReturnT, ReturnType>::value, "Bad route return type");
 
     using context_type = ContextT;
 

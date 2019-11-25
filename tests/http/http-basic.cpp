@@ -15,7 +15,7 @@ TEST(HttpBasicTest, Nominal) {
     boost::asio::io_context srvctx;
     using server_type = net::http::plain_server;
     server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}};
-    srv.on("/test").complete([](server_type::context_type& context) -> server_type::route_return_type {
+    srv.on("/test").complete([](server_type::context_type& context) {
         auto request = context.req();
         net::http::response<net::http::string_body> res{
             std::piecewise_construct,
@@ -24,7 +24,7 @@ TEST(HttpBasicTest, Nominal) {
         };
         res.set(net::http::field::content_type, "text/plain");
         res.content_length(res.body().size());
-        return std::move(res);
+        return res;
     });
 
     auto fut = std::async([&srvctx] {
@@ -49,7 +49,7 @@ TEST(HttpBasicTest, FileRead) {
     boost::asio::io_context srvctx;
     using server_type = net::http::plain_server;
     server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}};
-    srv.on("/get_this_test").complete([](server_type::context_type& context) -> server_type::route_return_type {
+    srv.on("/get_this_test").complete([](server_type::context_type& context) {
         net::error_code ec;
         net::http::response<net::http::file_body> resp;
         net::http::file_body::value_type file;
@@ -57,7 +57,7 @@ TEST(HttpBasicTest, FileRead) {
         if (ec)
             throw std::runtime_error(ec.message());
         resp.body() = std::move(file);
-        return std::move(resp);
+        return resp;
     });
 
     auto fut = std::async([&srvctx] {
@@ -86,7 +86,7 @@ TEST(HttpBasicTest, Add) {
     boost::asio::io_context srvctx;
     using server_type = net::http::plain_server;
     server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}};
-    srv.on("/add/<a>/<b>").complete([](double a, double b, server_type::context_type& context) -> server_type::route_return_type {
+    srv.on("/add/<a>/<b>").complete([](double a, double b, server_type::context_type& context) {
         auto request = context.req();
         net::http::response<net::http::string_body> res{
             std::piecewise_construct,
@@ -95,7 +95,7 @@ TEST(HttpBasicTest, Add) {
         };
         res.set(net::http::field::content_type, "text/plain");
         res.content_length(res.body().size());
-        return std::move(res);
+        return res;
     });
 
     auto fut = std::async([&srvctx] {
@@ -130,7 +130,7 @@ TEST(HttpBasicTest, FileUpload) {
         if (ec)
             throw std::runtime_error(ec.message());
         return {net::http::file_body{}, std::move(file)};
-    }).complete([](const std::filesystem::path& path, server_type::context_type& context) -> server_type::route_return_type {
+    }).complete([](const std::filesystem::path& path, server_type::context_type& context) {
         auto& request = context.req<net::http::file_body>();
         net::http::response<net::http::string_body> res{
             std::piecewise_construct,
@@ -139,7 +139,7 @@ TEST(HttpBasicTest, FileUpload) {
         };
         res.set(net::http::field::content_type, "text/plain");
         res.content_length(res.body().size());
-        return std::move(res);
+        return res;
     });
 
     auto fut = std::async([&srvctx] {
@@ -272,7 +272,7 @@ TEST(HttpBasicTest, CustomBody) {
     boost::asio::io_context srvctx;
     using server_type = net::http::plain_server;
     server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}};
-    srv.on("/test").complete([](server_type::context_type& context) -> server_type::route_return_type {
+    srv.on("/test").complete([](server_type::context_type& context) {
         auto request = context.req();
         net::http::response<net::http::string_body> res{
             std::piecewise_construct,
@@ -281,7 +281,7 @@ TEST(HttpBasicTest, CustomBody) {
         };
         res.set(net::http::field::content_type, "text/plain");
         res.content_length(res.body().size());
-        return std::move(res);
+        return res;
     });
 
     auto fut = std::async([&srvctx] {

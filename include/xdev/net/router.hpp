@@ -79,7 +79,7 @@ public:
             auto data = std::make_shared<typename traits::data_type>();
             _handler = [this, data, handler](const std::smatch& match, RouterContextT& ctx) {
                 traits::load_data(match, *data);
-                return traits::invoke(handler, *data, ctx);
+                return return_type{std::move(traits::invoke(handler, *data, ctx))};
             };
             return *this;
         }
