@@ -15,12 +15,11 @@ TEST(HttpBasicTest, Nominal) {
     boost::asio::io_context srvctx;
     using server_type = net::http::plain_server;
     server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}};
-    srv.on("/test").complete([](server_type::context_type& context) {
-        auto request = context.req();
+    srv.on("/test").complete([] {
         net::http::response<net::http::string_body> res{
             std::piecewise_construct,
             std::make_tuple("ok"),
-            std::make_tuple(net::http::status::ok, request.version())
+            std::make_tuple(net::http::status::ok, 10)
         };
         res.set(net::http::field::content_type, "text/plain");
         res.content_length(res.body().size());
@@ -131,7 +130,7 @@ TEST(HttpBasicTest, FileUpload) {
     boost::asio::io_context srvctx;
     using server_type = net::http::plain_server;
     server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}};
-    srv.on("/upload/<path>").init([](const std::filesystem::path& path, server_type::context_type& context) {
+    srv.on("/upload/<path>").init([](const std::filesystem::path& path) {
         boost::system::error_code ec;
         if (!std::filesystem::exists(path.parent_path())) {
             std::filesystem::create_directories(path.parent_path());

@@ -53,7 +53,9 @@ struct view_handler_traits<ReturnT, ContextT, ReturnType(ClassType::*)(Args...) 
 
     struct _make_tuple {
         constexpr auto operator()() {
-            return __make_tuple<Args...>();
+            if constexpr (sizeof...(Args) == 0)
+                return std::make_tuple();
+            else return __make_tuple<Args...>();
         }
     };
 
@@ -86,7 +88,8 @@ struct view_handler_traits<ReturnT, ContextT, ReturnType(ClassType::*)(Args...) 
     };
 
     static bool load_data(const std::smatch& match, data_type& data) {
-        _load_data<0, 1, Args...>{}(data, match);
+        if constexpr (sizeof...(Args))
+            _load_data<0, 1, Args...>{}(data, match);
         return true;
     }
 
@@ -153,9 +156,9 @@ struct view_handler_traits<ReturnT, ContextT, ReturnType(ClassType::*)(Args...) 
     };
 
     static std::regex make_regex(const std::string& path) {
-        static const std::regex route_args_re(R"(<([^<>]+)>)");
         std::string pattern = path;
-        pattern_maker<0, Args...>{}(pattern);
+        if constexpr (sizeof...(Args))
+            pattern_maker<0, Args...>{}(pattern);
         return std::regex(pattern);
     }
 
