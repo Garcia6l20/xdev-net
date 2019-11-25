@@ -8,8 +8,12 @@
 #include <regex>
 #include <variant>
 
+#include <boost/beast/http.hpp>
+
+#include <xdev/type_index.hpp>
+#include <xdev/function_traits.hpp>
+
 #include <xdev/net/route_parameter.hpp>
-#include <xdev/net/function_traits.hpp>
 
 namespace xdev::net::http::details {
 
@@ -159,11 +163,29 @@ struct view_handler_traits<ReturnT, ContextT, ReturnType(ClassType::*)(Args...) 
 
 template <typename...BodyTypes>
 struct body_traits {
+    template <typename BodyType>
+    using request = boost::beast::http::request<BodyType>;
+    template <typename BodyType>
+    using response = boost::beast::http::response<BodyType>;
+    template <typename BodyType>
+    using request_parser = boost::beast::http::request_parser<BodyType>;
+
     using body_variant = std::variant<BodyTypes...>;
     using body_value_variant = std::variant<typename BodyTypes::value_type...>;
     using response_variant = std::variant<response<BodyTypes>...>;
     using parser_variant = std::variant<request_parser<BodyTypes>...>;
     using request_variant = std::variant<request<BodyTypes>...>;
+
+    template <typename T>
+    static constexpr std::size_t body_index = type_index_v<T, BodyTypes...>;
+
+    template <typename BodyValueType>
+    static auto body_of() {
+        using CleanBodyValueType = std::remove_cvref_t<BodyValueType>;
+        const auto index = type_index_v<CleanBodyValueType, typename BodyTypes::value_type...>;
+        return body_variant{std::in_place_index<index>};
+    }
+
 };
 
 }  // namespace xdev::net::details

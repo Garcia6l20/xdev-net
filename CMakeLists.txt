@@ -35,8 +35,10 @@ configure_file(include/xdev/net/config.hpp.in ${PROJECT_BINARY_DIR}/include/xdev
 
 set(${PROJECT_NAME}-headers
     include/xdev/net.hpp
+    include/xdev/type_index.hpp
+    include/xdev/function_traits.hpp
+
     ${PROJECT_BINARY_DIR}/include/xdev/net/config.hpp
-    include/xdev/net/function_traits.hpp
     include/xdev/net/http_server.hpp
     include/xdev/net/http_client.hpp
     include/xdev/net/router.hpp

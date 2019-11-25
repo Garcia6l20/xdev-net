@@ -61,7 +61,8 @@ public:
             auto data = std::make_shared<typename traits::data_type>();
             _init_handler = [this, data, handler](const std::smatch& match, RouterContextT& ctx) {
                 traits::load_data(match, *data);
-                return traits::invoke(handler, *data, ctx);
+                auto res = traits::invoke(handler, *data, ctx);
+                return init_return_type{ body_traits::template body_of<decltype(res)>(), std::move(res) };
             };
             return *this;
         }

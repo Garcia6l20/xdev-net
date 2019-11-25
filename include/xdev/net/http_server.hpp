@@ -1,5 +1,8 @@
 #pragma once
 
+#include <boost/beast/http/file_body.hpp>
+#include <boost/beast/core/file.hpp>
+
 #include <xdev/net/router.hpp>
 
 #include <boost/asio/spawn.hpp>
