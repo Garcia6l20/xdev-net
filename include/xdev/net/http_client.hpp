@@ -50,8 +50,31 @@ public:
         process_request(req, response, yield, ec);
     }
 
-    template <typename RequestBodyType = beast::http::string_body, typename ResponsetBodyType = beast::http::string_body>
-    void process_request(beast::http::request<RequestBodyType>& request, beast::http::response<ResponsetBodyType>& response, asio::yield_context yield, boost::system::error_code& ec) {
+    template <typename ResponsetBodyType = beast::http::string_body, typename ChunkProvider>
+    void post(ChunkProvider chunk_provider, response<ResponsetBodyType>& response, asio::yield_context yield, boost::system::error_code& ec) {
+        request<empty_body> req {http::verb::post, {_url.path().data(), _url.path().size()}, _http_version};
+        req.chunked(true);
+        if (!_wait_connected(yield, ec))
+            return;
+        request_serializer<empty_body> sr {req};
+        http::async_write_header(derived().stream(), sr, yield[ec]);
+        if (ec) return;
+        while (true) {
+            auto chunk = chunk_provider();
+            if (chunk) {
+                //http::async_write(derived().stream(), make_chunk(*chunk), yield[ec]);
+                asio::const_buffer buf {chunk->data(), chunk->size()};
+                beast::net::write(derived().stream(), make_chunk(buf));
+            } else {
+                break;
+            }
+        }
+        beast::net::write(derived().stream(), make_chunk_last());
+        beast::flat_buffer b;
+        http::async_read(derived().stream(), b, response, yield[ec]);
+    }
+
+    bool _wait_connected(asio::yield_context yield, boost::system::error_code& ec) {
         static const auto timeout = std::chrono::seconds(30);
         auto start_t = std::chrono::system_clock::now();
         while (!_connected) {
@@ -59,9 +82,16 @@ public:
             t.async_wait(yield);
             if (start_t - std::chrono::system_clock::now() >= timeout) {
                 ec = make_error_code(asio::error::timed_out);
-                return;
+                return false;
             }
         }
+        return true;
+    }
+
+    template <typename RequestBodyType = beast::http::string_body, typename ResponsetBodyType = beast::http::string_body>
+    void process_request(beast::http::request<RequestBodyType>& request, beast::http::response<ResponsetBodyType>& response, asio::yield_context yield, boost::system::error_code& ec) {
+        if (!_wait_connected(yield, ec))
+            return;
         std::string target = {_url.path().data(), _url.path().size()};
         request.set(http::field::host, _url.hostname());
         request.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
@@ -154,6 +184,21 @@ public:
             clt.post(filepath, response, yield, ec);
         });
     }
+
+    template <typename BodyType = beast::http::string_body, typename ChunkProvider>
+    static void async_post(url&&url_,
+                           ChunkProvider chunk_provider,
+                           beast::http::response<BodyType>& response, asio::io_context& ioc, boost::system::error_code& ec) {
+        asio::spawn(ioc, [&ioc,
+                    url = std::forward<url>(url_),
+                    chunk_provider,
+                    &response,
+                    &ec] (asio::yield_context yield) mutable {
+            client clt {ioc};
+            clt.connect(std::move(url), yield, ec);
+            clt.post(chunk_provider, response, yield, ec);
+        });
+    }
 };
 
 class ssl_client: public base_client<ssl_client> {
@@ -229,6 +274,23 @@ public:
             ssl_client clt {ioc, ssl_ctx};
             clt.connect(std::move(url), yield, ec);
             clt.post(filepath, response, yield, ec);
+        });
+    }
+
+    template <typename BodyType = beast::http::string_body, typename ChunkProvider>
+    static void async_post(url&&url_,
+                           ssl::context& ssl_ctx,
+                           ChunkProvider chunk_provider,
+                           beast::http::response<BodyType>& response, asio::io_context& ioc, boost::system::error_code& ec) {
+        asio::spawn(ioc, [&ioc,
+                    &ssl_ctx,
+                    url = std::forward<url>(url_),
+                    chunk_provider,
+                    &response,
+                    &ec] (asio::yield_context yield) mutable {
+            ssl_client clt {ioc, ssl_ctx};
+            clt.connect(std::move(url), yield, ec);
+            clt.post(chunk_provider, response, yield, ec);
         });
     }
 };
