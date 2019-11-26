@@ -6,6 +6,7 @@
 
 #include <boost/asio/spawn.hpp>
 
+#include <any>
 #include <functional>
 #include <variant>
 #include <iostream>
@@ -45,8 +46,18 @@ public:
                 }
             }, _request_var);
         }
+        template <typename T, typename...Args>
+        T& make_data(Args&&...args) {
+            _data = std::make_shared<T>(std::forward<Args>(args)...);
+            return data<T>();
+        }
+        template <typename T>
+        T& data() {
+            return *std::static_pointer_cast<T>(_data).get();
+        }
     private:
         typename body_traits::request_variant _request_var;
+        std::shared_ptr<void> _data;
         friend class session<Derived, BodyTypes...>;
     };
 
@@ -71,71 +82,87 @@ public:
         beast::error_code ec;
         beast::flat_buffer buffer;
         context ctx;
+        std::string chunk;
+        chunk_extensions ce;
+        auto chunk_header_cb = [&](std::uint64_t size, boost::string_view extensions, error_code&ec) mutable {
+            ce.parse(extensions, ec);
+            if (ec)
+                return;
+            if (size > std::numeric_limits<std::size_t>::max()) {
+                ec = error::body_limit;
+            }
+            chunk.reserve(size);
+            chunk.clear();
+        };
+        auto chunk_body_cb = [&](std::uint64_t remain, boost::string_view body, error_code&ec) mutable {
+            if (remain == body.size())
+                ec = error::end_of_chunk;
+            chunk.append(body.data(), body.size());
+            return body.size();
+        };
+        typename router_type::route* current_route = nullptr;
+        std::smatch current_match;
+        typename body_traits::parser_variant parser_var;
         for (;;) {
+            ce.clear();
+
             request_parser<empty_body> req0;
-            chunk_extensions ce;
-            std::string chunk;
-            auto chunk_header_cb = [&](std::uint64_t size, boost::string_view extensions, error_code&ec) mutable {
-                std::cout << "on_chunk_header: " << extensions << std::endl;
-                ce.parse(extensions, ec);
-                if (ec)
-                    return;
-                if (size > std::numeric_limits<std::size_t>::max()) {
-                    ec = error::body_limit;
-                }
-                chunk.reserve(size);
-                chunk.clear();
-            };
-            auto chunk_body_cb = [&](std::uint64_t remain, boost::string_view body, error_code&ec) mutable {
-                std::cout << "on_chunk_body: " << body << std::endl;
-                if (remain == body.size())
-                    ec = error::end_of_chunk;
-                chunk.append(body.data(), body.size());
-                return body.size();
-            };
             req0.on_chunk_header(chunk_header_cb);
             req0.on_chunk_body(chunk_body_cb);
             async_read_header(derived().stream(), buffer, req0, yield[ec]);
             // get associated route
             try {
                 auto target = req0.get().target();
-                std::string path{target.data(), target.size()};
-                auto route_data = _router->route_for(path);
-                auto& route = std::get<0>(route_data);
-                auto match = std::move(std::get<1>(route_data));
-                typename body_traits::parser_variant parser_var;
-                route.init_route(match, ctx, parser_var, req0);
-                std::visit([this, yield, &ec, &buffer, &ctx, &chunk_header_cb, &chunk_body_cb, &ce](auto&p) mutable {
-                    p.on_chunk_header(chunk_header_cb);
-                    p.on_chunk_body(chunk_body_cb);
-                    async_read_some(derived().stream(), buffer, p, yield[ec]);
-                    if(ec != error::end_of_chunk)
-                        throw std::runtime_error(ec.message());
-                    else
-                        ec.assign(0, ec.category());
-                    // We got a whole chunk, print the extensions:
-                    for(auto const& extension : ce)
-                    {
-                        std::cout << "Extension: " << std::get<0>(extension);
-                        if(! std::get<1>(extension).empty())
-                            std::cout << " = " << std::get<1>(extension) << std::endl;
-                        else
-                            std::cout << std::endl;
+                if (!target.empty()) {
+                    std::string path{target.data(), target.size()};
+                    auto route_data = _router->route_for(path);
+                    current_route = &std::get<0>(route_data);
+                    current_match = std::move(std::get<1>(route_data));
+                    current_route->do_init(current_match, ctx, parser_var, req0);
+                    std::visit([&chunk_header_cb, &chunk_body_cb](auto&p) mutable {
+                        p.on_chunk_header(chunk_header_cb);
+                        p.on_chunk_body(chunk_body_cb);
+                    }, parser_var);
+                    while (!std::visit([](auto& p) {
+                        return p.is_done();
+                    }, parser_var)) {
+                        std::visit([this, yield, &ec, &buffer, &ctx, &ce, &current_match, &current_route, &chunk](auto&p) mutable {
+                            async_read_some(derived().stream(), buffer, p, yield[ec]);
+                            if(ec && ec != error::end_of_chunk) {
+                                throw std::runtime_error(ec.message());
+                            } else
+                                ec.assign(0, ec.category());
+                            // We got a whole chunk, print the extensions:
+                            for(auto const& extension : ce)
+                            {
+                                std::cout << "Extension: " << std::get<0>(extension);
+                                if(! std::get<1>(extension).empty())
+                                    std::cout << " = " << std::get<1>(extension) << std::endl;
+                                else
+                                    std::cout << std::endl;
+                            }
+                            if (p.chunked() && chunk.size()) {
+                                current_route->do_chunk(chunk, current_match, ctx);
+                            }
+                        }, parser_var);
                     }
-
-                    ctx._request_var = p.release();
-                }, parser_var);
-                if (ec == http::error::end_of_stream)
-                    break;
-                if  (ec)
-                    throw std::runtime_error(ec.message());
-                std::visit([this, yield, &ec, &ctx](auto&&resp) {
-                    std::visit([&resp](auto&request) {
-                        resp.version(request.version());
-                        resp.keep_alive(request.keep_alive());
-                    }, ctx._request_var);
-                    send(std::move(resp), yield, ec);
-                }, route(match, ctx));
+                    std::visit([&ctx] (auto& p) {
+                        ctx._request_var = p.release();
+                    }, parser_var);
+                    if (ec == http::error::end_of_stream)
+                        break;
+                    if  (ec)
+                        throw std::runtime_error(ec.message());
+                    std::visit([this, yield, &ec, &ctx](auto&&resp) {
+                        std::visit([&resp](auto&request) {
+                            resp.version(request.version());
+                            resp.keep_alive(request.keep_alive());
+                        }, ctx._request_var);
+                        send(std::move(resp), yield, ec);
+                    }, current_route->do_complete(current_match, ctx));
+                } else {
+                    throw std::runtime_error("bug");
+                }
             } catch(const typename router_type::not_found&) {
                 response<string_body> resp {
                     std::piecewise_construct,

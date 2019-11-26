@@ -33,6 +33,7 @@ public:
     struct route {
         using handler_type = std::function<return_type(std::smatch, RouterContextT&)>;
         using init_handler_type = std::function<init_return_type(std::smatch, RouterContextT&)>;
+        using chunk_handler_type = std::function<void(std::string_view, RouterContextT&)>;
         using data_type = std::shared_ptr<void>;
         struct not_matching: std::exception {
         };
@@ -56,15 +57,21 @@ public:
 
         template <typename HandlerT>
         route& init(HandlerT handler) {
-            if (_handler) {
+            if (_complete_handler) {
                 throw std::logic_error("init must be called() before complete()");
             }
             using traits = details::view_handler_traits<init_return_type, RouterContextT, HandlerT>;
             auto data = std::make_shared<typename traits::data_type>();
             _init_handler = [this, data, handler](const std::smatch& match, RouterContextT& ctx) {
                 traits::load_data(match, *data);
-                auto res = traits::invoke(handler, *data, ctx);
-                return init_return_type{ body_traits::template body_of<decltype(res)>(), std::move(res) };
+                using Rt = std::invoke_result_t<decltype(traits::invoke), decltype(handler), decltype(*data), decltype(ctx)>;
+                if constexpr (std::is_void_v<Rt>) {
+                    traits::invoke(handler, *data, ctx);
+                    return init_return_type{ string_body{}, string_body::value_type{} };
+                } else {
+                    auto res = traits::invoke(handler, *data, ctx);
+                    return init_return_type{ body_traits::template body_of<decltype(res)>(), std::move(res) };
+                }
             };
             return *this;
         }
@@ -80,23 +87,36 @@ public:
             }
             _regex = traits::make_regex(_path_escaped);
             auto data = std::make_shared<typename traits::data_type>();
-            _handler = [this, data, handler](const std::smatch& match, RouterContextT& ctx) {
+            _complete_handler = [this, data, handler](const std::smatch& match, RouterContextT& ctx) {
                 traits::load_data(match, *data);
                 return return_type{std::move(traits::invoke(handler, *data, ctx))};
             };
             return *this;
         }
 
-        std::tuple<bool, std::smatch> operator()(const std::string& url) {
+        template <typename HandlerT>
+        route& chunk(HandlerT handler) {
+            using traits = details::view_handler_traits<void, RouterContextT, HandlerT>;
+            _chunk_handler = [this, handler] (std::string_view data, RouterContextT& ctx) {
+                if constexpr (traits::has_context_last) {
+                    handler(data, ctx);
+                } else {
+                    handler(data);
+                }
+            };
+            return *this;
+        }
+
+        std::tuple<bool, std::smatch> match(const std::string& url) {
             std::smatch match;
             return {std::regex_match(url, match, _regex), std::move(match)};
         }
 
-        return_type operator()(const std::smatch& match, RouterContextT& ctx) {
-            return _handler(match, ctx);
+        return_type do_complete(const std::smatch& match, RouterContextT& ctx) {
+            return _complete_handler(match, ctx);
         }
 
-        void init_route(const std::smatch& match, RouterContextT& ctx, parser_type& var, request_parser<empty_body>&req) {
+        void do_init(const std::smatch& match, RouterContextT& ctx, parser_type& var, request_parser<empty_body>&req) {
             if (!_init_handler) {
                 _assign_parser(var, req);
                 return;
@@ -119,12 +139,20 @@ public:
             }
         }
 
+        void do_chunk(std::string_view data, const std::smatch& match, RouterContextT& ctx) {
+            if (!_chunk_handler) {
+                throw std::runtime_error("no chunk handler defined");
+            }
+            _chunk_handler(data, ctx);
+        }
+
     private:
         std::string _path, _path_escaped;
         request_parser_assign_func _assign_parser;
         std::regex _regex;
-        handler_type _handler;
+        handler_type _complete_handler;
         init_handler_type _init_handler;
+        chunk_handler_type _chunk_handler;
     };
 
     route& add_route(const std::string& path) {
@@ -133,7 +161,7 @@ public:
 
     std::tuple<route&, std::smatch> route_for(const std::string& url) {
         for (auto& route: _routes) {
-            auto res = route(url);
+            auto res = route.match(url);
             if (std::get<0>(res))
                 return {route, std::move(std::get<1>(res))};
         }

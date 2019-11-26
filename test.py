@@ -25,6 +25,6 @@ def gen_chunks():
     yield b"bitches"
     yield b"!!!"
 
-res = requests.post('http://localhost:4242/chunked', data=gen_chunks())
+res = requests.post('http://localhost:4242/chunked-upload/test.txt', data=gen_chunks())
 print('got a response...')
 print(res.text)
