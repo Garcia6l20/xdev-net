@@ -17,6 +17,16 @@
 
 namespace xdev::net::http::details {
 
+
+template <typename Ctx>
+struct no_context_predicate {
+    template<typename T>
+    struct predicate {
+        static constexpr bool value = true;
+    };
+};
+
+
 template <typename ReturnT, typename ContextT, typename T>
 struct view_handler_traits
     : public view_handler_traits<ReturnT, ContextT, decltype(&T::operator())>
@@ -25,46 +35,24 @@ struct view_handler_traits
 template <typename ReturnT, typename ContextT, typename ClassType, typename ReturnType, typename... Args>
 struct view_handler_traits<ReturnT, ContextT, ReturnType(ClassType::*)(Args...) const> {
 
-    using traits = function_traits<ReturnType(ClassType::*)(Args...)>;
-    using return_type = typename traits::return_type;
-    using function_type = typename traits::function_type;
-    static const size_t arity = traits::arity;
+    using context_type = ContextT;
+    using handler_traits = function_traits<ReturnType(ClassType::*)(Args...)>;
+    using return_type = typename handler_traits::return_type;
+    using function_type = typename handler_traits::function_type;
+    static const size_t arity = handler_traits::arity;
 
     template <size_t idx>
-    using arg = typename traits::template arg<idx>;
+    using arg = typename handler_traits::template arg<idx>;
 
-    // static_assert (std::is_same<ReturnT, ReturnType>::value, "Bad route return type");
+    static constexpr bool has_context_last = arity > 0 && std::is_same<typename arg<arity - 1>::clean_type, context_type>::value;
 
-    using context_type = ContextT;
+    using no_context_predicate = typename handler_traits::template parameters_tuple_disable<context_type>;
+    static_assert (no_context_predicate::template enabled<context_type> == false, "");
 
-    static constexpr bool has_context_last = std::is_same<typename arg<arity - 1>::clean_type, context_type>::value;
-    //static_assert (has_context_last, "");
+    using parameters_tuple_type = typename handler_traits::template parameters_tuple<no_context_predicate>;
+    using data_type = typename parameters_tuple_type::tuple_type;
 
-    template <typename FirstT, typename...RestT>
-    static constexpr auto __make_tuple() {
-        if constexpr (!sizeof...(RestT)){
-            if constexpr (has_context_last)
-                return std::make_tuple<bool>({true});
-            else return std::make_tuple<FirstT>({});
-        } else {
-            return std::tuple_cat(std::make_tuple<FirstT>({}), __make_tuple<RestT...>());
-        }
-    }
-
-    struct _make_tuple {
-        constexpr auto operator()() {
-            if constexpr (sizeof...(Args) == 0)
-                return std::make_tuple();
-            else return __make_tuple<Args...>();
-        }
-    };
-
-    static constexpr auto make_tuple() {
-        return _make_tuple{}();
-    }
-
-    using data_type = std::invoke_result_t<_make_tuple>;
-
+    static constexpr auto make_tuple = parameters_tuple_type::make;
 
     template<int idx, int match_idx, typename...ArgsT>
     struct _load_data;
@@ -108,21 +96,50 @@ struct view_handler_traits<ReturnT, ContextT, ReturnType(ClassType::*)(Args...) 
         }
     }
 
-    template <int idx, typename Ret>
-    static Ret _invoke (std::function<Ret()> func, const data_type& /*data*/, context_type& /*ctx*/)
-    {
-        return func();
-    }
 
-    template <int idx, typename Ret, typename Arg0, typename...ArgsT>
-    static Ret _invoke (std::function<Ret(Arg0, ArgsT...)> func, const data_type& data, context_type& ctx)
-    {
-        return _invoke<idx + 1>(_make_recursive_lambda<idx>(func, data, ctx), data, ctx);
-    }
+    template<typename Ret, typename Cls, typename IsMutable, typename IsLambda, typename... ArgsT>
+    struct _invoker: function_detail::types<Ret, Cls, IsMutable, IsLambda, Args...> {
+        template <int idx>
+        static Ret _invoke (std::function<Ret()> func, const data_type& /*data*/, context_type& /*ctx*/)
+        {
+            return func();
+        }
 
-    static return_type invoke(function_type func, const data_type& data, context_type& ctx) {
-        return _invoke<0>(func, data, ctx);
-    }
+        template <int idx, typename Arg0, typename...RestArgsT>
+        static Ret _invoke (std::function<Ret(Arg0, RestArgsT...)> func, const data_type& data, context_type& ctx)
+        {
+            return _invoke<idx + 1>(_make_recursive_lambda<idx>(func, data, ctx), data, ctx);
+        }
+
+        template <typename Fcn>
+        Ret operator()(Fcn func, const data_type& data, context_type& ctx) {
+            function_type fcn = func;
+            return _invoke<0>(fcn, data, ctx);
+        }
+    };
+ 
+    template<class T>
+    struct invoker
+        : invoker<decltype(&std::remove_cvref_t<T>::operator())>
+    {};
+    
+    // mutable lambda
+    template<class Ret, class Cls, class... ArgsT>
+    struct invoker<Ret(Cls::*)(ArgsT...)>
+        : _invoker<Ret, Cls, std::true_type, std::true_type, ArgsT...>
+    {};
+
+    // immutable lambda
+    template<class Ret, class Cls, class... ArgsT>
+    struct invoker<Ret(Cls::*)(ArgsT...) const>
+        : _invoker<Ret, Cls, std::false_type, std::true_type, ArgsT...>
+    {};
+
+    // function
+    template<class Ret, class... ArgsT>
+    struct invoker<std::function<Ret(ArgsT...)>>
+        : _invoker<Ret, std::nullptr_t, std::true_type, std::false_type, Args...>
+    {};
 
     template <int idx>
     static void _make_match_pattern(std::string& pattern) {
@@ -188,6 +205,8 @@ struct body_traits {
         const auto index = type_index_v<CleanBodyValueType, typename BodyTypes::value_type...>;
         return body_variant{std::in_place_index<index>};
     }
+    //template <typename BodyValueType>
+    //using body_of_t = decltype(body_of<BodyValueType>());
 
 };
 

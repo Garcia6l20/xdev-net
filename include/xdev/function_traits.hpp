@@ -25,6 +25,48 @@ namespace xdev {
             };
 
             using function_type = std::function<Ret(Args...)>;
+
+            struct parameters_tuple_all_enabled {
+                template <typename T>
+                static constexpr bool enabled = false;
+            };
+
+            template <typename...ArgsT>
+            struct parameters_tuple_disable {
+                template <typename T>
+                static constexpr bool enabled = !std::disjunction_v<std::is_same<std::remove_cvref_t<T>, std::remove_cvref_t<ArgsT>>...>;
+            };
+
+            template <typename Predicate = parameters_tuple_all_enabled>
+            struct parameters_tuple {
+
+                template <typename FirstT, typename...RestT>
+                static constexpr auto __make_tuple() {
+                    if constexpr (!sizeof...(RestT)) {
+                        if constexpr (Predicate::template enabled<FirstT>)
+                            return std::make_tuple<FirstT>({});
+                        else return std::tuple();
+                    } else {
+                        if constexpr (Predicate::template enabled<FirstT>)
+                            return std::tuple_cat(std::make_tuple<FirstT>({}), __make_tuple<RestT...>());
+                        else return __make_tuple<RestT...>();
+                    }
+                }
+
+                struct _make {
+                    constexpr auto operator()() {
+                        if constexpr (sizeof...(Args) == 0)
+                            return std::make_tuple();
+                        else return __make_tuple<Args...>();
+                    }
+                };
+
+                static constexpr auto make() {
+                    return _make{}();
+                }
+
+                using tuple_type = std::invoke_result_t<_make>;
+            };
         };
     }
 
