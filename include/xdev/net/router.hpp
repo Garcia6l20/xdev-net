@@ -126,8 +126,12 @@ public:
                     reply.content_length(reply.body().size());
                     return reply;
                 } else if constexpr (std::disjunction_v<std::is_same<std::remove_cvref_t<ResT>, typename BodyTypes::value_type>...>) {
-                    static_assert (always_false_v<ResT>, "TODO !!!");
-                    return std::move(result);
+                    response<typename body_traits::template body_of_value_t<ResT>> reply {
+                        std::piecewise_construct,
+                        std::make_tuple(std::move(result)),
+                        std::make_tuple(status::ok, XDEV_NET_HTTP_DEFAULT_VERSION)
+                    };
+                    return std::move(reply);
                 } else static_assert (always_false_v<ResT>, "Unhandled complete return type");
             };
             return *this;

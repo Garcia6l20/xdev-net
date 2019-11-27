@@ -84,7 +84,6 @@ struct view_handler_traits<ReturnT, ContextT, ReturnType(ClassType::*)(Args...) 
     template <int idx, typename Ret, typename Arg0, typename... ArgsT>
     static std::function<Ret(ArgsT...)> _make_recursive_lambda(std::function<Ret(Arg0, ArgsT...)> func, const data_type& data, context_type& ctx) {
         if constexpr (sizeof...(ArgsT) == 0 && has_context_last) {
-            static_assert (std::is_same_v<std::remove_cv_t<std::remove_reference_t<Arg0>>, context_type>, "Ooops");
             return [=, &ctx]() -> Ret {
                  return func(ctx);
             };
@@ -117,12 +116,12 @@ struct view_handler_traits<ReturnT, ContextT, ReturnType(ClassType::*)(Args...) 
             return _invoke<0>(fcn, data, ctx);
         }
     };
- 
+
     template<class T>
     struct invoker
         : invoker<decltype(&std::remove_cvref_t<T>::operator())>
     {};
-    
+
     // mutable lambda
     template<class Ret, class Cls, class... ArgsT>
     struct invoker<Ret(Cls::*)(ArgsT...)>
@@ -199,14 +198,19 @@ struct body_traits {
     template <typename T>
     static constexpr std::size_t body_index = type_index_v<T, BodyTypes...>;
 
+    template <typename T>
+    static constexpr auto body_value_index_v = type_index_v<std::remove_cvref_t<T>, typename BodyTypes::value_type...>;
+
+    template <typename T>
+    static constexpr auto body_index_v = type_index_v<std::remove_cvref_t<T>, BodyTypes...>;
+
     template <typename BodyValueType>
     static auto body_of() {
-        using CleanBodyValueType = std::remove_cvref_t<BodyValueType>;
-        const auto index = type_index_v<CleanBodyValueType, typename BodyTypes::value_type...>;
-        return body_variant{std::in_place_index<index>};
+        return body_variant{std::in_place_index<body_value_index_v<BodyValueType>>};
     }
-    //template <typename BodyValueType>
-    //using body_of_t = decltype(body_of<BodyValueType>());
+
+    template <typename BodyValueType>
+    using body_of_value_t = type_at_t<type_index_v<std::remove_cvref_t<BodyValueType>, typename BodyTypes::value_type...>, BodyTypes...>;
 
 };
 

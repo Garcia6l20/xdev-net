@@ -55,13 +55,11 @@ TEST(HttpBasicTest, FileRead) {
     server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}};
     srv.on("/get_this_test").complete([](server_type::context_type& context) {
         net::error_code ec;
-        auto resp = context.make_response<net::http::file_body>();
         net::http::file_body::value_type file;
         file.open(__FILE__, boost::beast::file_mode::read, ec);
         if (ec)
             throw std::runtime_error(ec.message());
-        resp.body() = std::move(file);
-        return resp;
+        return file;
     });
 
     std::atomic_bool ready = false;;
