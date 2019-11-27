@@ -2,7 +2,10 @@
 
 #include <xdev/net.hpp>
 
+#include <xdev/variant_tools.hpp>
 #include <xdev/net/router_details.hpp>
+
+#include <boost/type_index.hpp>
 
 #include <variant>
 
@@ -125,25 +128,29 @@ public:
                 using body_value_variant = typename body_traits::body_value_variant;
                 auto init_tup = _init_handler(match, ctx);
                 std::visit([this,&var,&req, &init_tup](auto&body) {
-                    std::visit([this,&var,&req, &body](auto&&body_value) {
-                        using BodyT = std::decay_t<decltype(body)>;
-                        using BodyValueT = std::decay_t<decltype(body_value)>;
-                        if constexpr (std::is_same_v<typename BodyT::value_type, BodyValueT>) {
-                            var.template emplace<request_parser<BodyT>>(std::move(req));
-                            std::get<request_parser<BodyT>>(var).get().body() = std::move(body_value);
-                        } else {
-                            throw std::runtime_error("Body type mismatch");
-                        }
+                    using BodyT = std::decay_t<decltype(body)>;
+                    std::visit(overloaded {
+                       [] (auto&body_value) {
+                            using BodyValueT = std::decay_t<decltype(body_value)>;
+                            throw std::runtime_error("Body type mismatch: " +
+                                       boost::typeindex::type_id<request_parser<BodyT>>().pretty_name() + " != " +
+                                       boost::typeindex::type_id<BodyValueT>().pretty_name());
+                       },
+                       [this,&var,&req, &body] (typename BodyT::value_type& body_value) {
+                           var.template emplace<request_parser<BodyT>>(std::move(req));
+                           std::get<request_parser<BodyT>>(var).get().body() = std::move(body_value);
+                       }
                     }, std::get<1>(init_tup));
                 }, std::get<0>(init_tup));
             }
         }
 
-        void do_chunk(std::string_view data, const std::smatch& match, RouterContextT& ctx) {
+        bool do_chunk(std::string_view data, const std::smatch& /*match*/, RouterContextT& ctx) {
             if (!_chunk_handler) {
-                throw std::runtime_error("no chunk handler defined");
+                return false;
             }
             _chunk_handler(data, ctx);
+            return true;
         }
 
     private:

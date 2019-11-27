@@ -38,7 +38,10 @@ set(${PROJECT_NAME}-headers
     include/xdev/net.hpp
     include/xdev/type_index.hpp
     include/xdev/function_traits.hpp
+    include/xdev/variant_tools.hpp
 
+
+    include/xdev/net/config.hpp.in
     ${PROJECT_BINARY_DIR}/include/xdev/net/config.hpp
     include/xdev/net/http_server.hpp
     include/xdev/net/http_client.hpp
@@ -64,7 +67,7 @@ if(XDEV_USE_MBEDTLS)
     set(MBEDTLS_LIBRARIES mbedtls mbedcrypto mbedx509)
 endif()
 
-target_include_directories(${PROJECT_NAME} PUBLIC include ${${PROJECT_NAME}_EXTRA_INCLUDE_DIR} ${Boost_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
+target_include_directories(${PROJECT_NAME} PUBLIC include ${PROJECT_BINARY_DIR}/include ${${PROJECT_NAME}_EXTRA_INCLUDE_DIR} ${Boost_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
 target_link_directories(${PROJECT_NAME} PUBLIC ${Boost_LIBRARY_DIRS})
 target_link_libraries(${PROJECT_NAME} PUBLIC Threads::Threads ${Boost_LIBRARIES} ${OPENSSL_LIBRARIES} ${MBEDTLS_LIBRARIES})
 

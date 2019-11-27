@@ -3,6 +3,7 @@
 #include <xdev/net.hpp>
 
 #include <xdev/net/router.hpp>
+#include <xdev/net/config.hpp>
 
 #include <boost/asio/spawn.hpp>
 
@@ -71,11 +72,27 @@ public:
     }
 
     template<bool isRequest, class Body, class Fields>
-    bool send(beast::http::message<isRequest, Body, Fields>&& msg, asio::yield_context yield, error_code& ec) {
+    bool send(beast::http::message<isRequest, Body, Fields>&& msg, asio::yield_context yield) {
         _close = msg.need_eof();
         serializer<isRequest, Body, Fields> sr{msg};
-        async_write(derived().stream(), sr, yield[ec]);
+        async_write(derived().stream(), sr, yield);
         return msg.need_eof();
+    }
+
+    bool send(status status, asio::yield_context yield) {
+        return send(response<empty_body> {
+            std::piecewise_construct,
+            std::make_tuple(),
+            std::make_tuple(status, XDEV_NET_HTTP_DEFAULT_VERSION)
+        }, yield);
+    }
+
+    bool send(status status, std::string_view message, asio::yield_context yield) {
+        return send(response<string_body> {
+            std::piecewise_construct,
+            std::make_tuple(message),
+            std::make_tuple(status, XDEV_NET_HTTP_DEFAULT_VERSION)
+        }, yield);
     }
 
     void read(asio::yield_context yield) {
@@ -142,7 +159,9 @@ public:
                                     std::cout << std::endl;
                             }
                             if (p.chunked() && chunk.size()) {
-                                current_route->do_chunk(chunk, current_match, ctx);
+                                if (!current_route->do_chunk(chunk, current_match, ctx)) {
+                                    send(status::not_implemented, yield[ec]);
+                                }
                             }
                         }, parser_var);
                     }
@@ -158,26 +177,16 @@ public:
                             resp.version(request.version());
                             resp.keep_alive(request.keep_alive());
                         }, ctx._request_var);
-                        send(std::move(resp), yield, ec);
+                        send(std::move(resp), yield);
                     }, current_route->do_complete(current_match, ctx));
                 } else {
                     throw std::runtime_error("bug");
                 }
             } catch(const typename router_type::not_found&) {
-                response<string_body> resp {
-                    std::piecewise_construct,
-                    std::make_tuple("not found"),
-                    std::make_tuple(net::http::status::not_found, req0.get().version())
-                };
-                send(std::move(resp), yield, ec);
+                send(net::http::status::not_found, yield[ec]);
                 _close = true;
             } catch(const std::exception& err) {
-                response<string_body> resp {
-                    std::piecewise_construct,
-                    std::make_tuple(err.what()),
-                    std::make_tuple(net::http::status::internal_server_error, req0.get().version())
-                };
-                send(std::move(resp), yield, ec);
+                send(net::http::status::internal_server_error, err.what(), yield[ec]);
                 _close = true;
             }
             if (_close || ec)
