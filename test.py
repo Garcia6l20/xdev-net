@@ -19,7 +19,12 @@ requests_log.setLevel(logging.DEBUG)
 requests_log.propagate = True
 
 print('sending get request...')
-res = requests.get('http://localhost:4242')
+
+def gen_chunks():
+    yield b"hello"
+    yield b"bitches"
+    yield b"!!!"
+
+res = requests.post('http://localhost:4242/chunked-upload/test.txt', data=gen_chunks())
 print('got a response...')
 print(res.text)
-
