@@ -21,15 +21,7 @@ TEST(HttpChunkTest, Nominal) {
         data.append(chunk);
     })
     .complete([] {
-        std::cout << "done" << std::endl;
-        net::http::response<net::http::string_body> res{
-            std::piecewise_construct,
-            std::make_tuple("ok"),
-            std::make_tuple(net::http::status::ok, 10)
-        };
-        res.set(net::http::field::content_type, "text/plain");
-        res.content_length(res.body().size());
-        return res;
+        return std::string("ok");
     });
 
     std::atomic_bool ready = false;;

@@ -3,6 +3,7 @@
 #include <xdev/net.hpp>
 
 #include <xdev/variant_tools.hpp>
+#include <xdev/net/config.hpp>
 #include <xdev/net/router_details.hpp>
 
 #include <boost/type_index.hpp>
@@ -67,12 +68,12 @@ public:
             auto data = std::make_shared<typename traits::data_type>();
             _init_handler = [this, data, handler](const std::smatch& match, RouterContextT& ctx) {
                 traits::load_data(match, *data);
-                using Rt = std::invoke_result_t<decltype(traits::invoke), decltype(handler), decltype(*data), decltype(ctx)>;
-                if constexpr (std::is_void_v<Rt>) {
-                    traits::invoke(handler, *data, ctx);
+                using invoker_type = typename traits::template invoker<decltype(handler)>;
+                if constexpr (std::is_void_v<typename invoker_type::return_type>) {
+                    invoker_type{}(handler, *data, ctx);
                     return init_return_type{ string_body{}, string_body::value_type{} };
                 } else {
-                    auto res = traits::invoke(handler, *data, ctx);
+                    auto res = invoker_type{}(handler, *data, ctx);
                     return init_return_type{ body_traits::template body_of<decltype(res)>(), std::move(res) };
                 }
             };
@@ -89,10 +90,49 @@ public:
                 };
             }
             _regex = traits::make_regex(_path_escaped);
-            auto data = std::make_shared<typename traits::data_type>();
-            _complete_handler = [this, data, handler](const std::smatch& match, RouterContextT& ctx) {
+            auto data = std::make_shared<typename traits::data_type>();            
+            _complete_handler = [this, data, handler](const std::smatch& match, RouterContextT& ctx) -> return_type {
                 traits::load_data(match, *data);
-                return return_type{std::move(traits::invoke(handler, *data, ctx))};
+                using invoker_type = typename traits::template invoker<decltype(handler)>;
+                auto result = std::move(invoker_type{}(handler, *data, ctx));
+                using ResT = std::decay_t<decltype(result)>;
+                if constexpr (std::disjunction_v<std::is_same<std::remove_cvref_t<ResT>, response<BodyTypes>>...>) {
+                    return std::move(result);
+                } else if constexpr (std::is_same_v<std::remove_cvref_t<ResT>, std::string>) {
+                    response<string_body> reply{
+                        std::piecewise_construct,
+                        std::make_tuple(result),
+                        std::make_tuple(status::ok, XDEV_NET_HTTP_DEFAULT_VERSION)
+                    };
+                    reply.set(field::content_type, "text/plain");
+                    reply.content_length(reply.body().size());
+                    return reply;
+                } else if constexpr (std::is_same_v<std::remove_cvref_t<ResT>, std::tuple<std::string, std::string>>) {
+                    response<string_body> reply{
+                        std::piecewise_construct,
+                        std::make_tuple(std::get<1>(result)),
+                        std::make_tuple(status::ok, XDEV_NET_HTTP_DEFAULT_VERSION)
+                    };
+                    reply.set(field::content_type, std::get<0>(result));
+                    reply.content_length(reply.body().size());
+                    return reply;
+                } else if constexpr (std::is_same_v<std::remove_cvref_t<ResT>, std::tuple<http::status, std::string, std::string>>) {
+                    response<string_body> reply{
+                        std::piecewise_construct,
+                        std::make_tuple(std::get<2>(result)),
+                        std::make_tuple(std::get<0>(result), XDEV_NET_HTTP_DEFAULT_VERSION)
+                    };
+                    reply.set(field::content_type, std::get<1>(result));
+                    reply.content_length(reply.body().size());
+                    return reply;
+                } else if constexpr (std::disjunction_v<std::is_same<std::remove_cvref_t<ResT>, typename BodyTypes::value_type>...>) {
+                    response<typename body_traits::template body_of_value_t<ResT>> reply {
+                        std::piecewise_construct,
+                        std::make_tuple(std::move(result)),
+                        std::make_tuple(status::ok, XDEV_NET_HTTP_DEFAULT_VERSION)
+                    };
+                    return std::move(reply);
+                } else static_assert (always_false_v<ResT>, "Unhandled complete return type");
             };
             return *this;
         }

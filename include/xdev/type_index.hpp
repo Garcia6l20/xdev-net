@@ -1,5 +1,8 @@
 #pragma once
 
+#include <type_traits>
+#include <tuple>
+
 namespace xdev {
 
     /**
@@ -20,4 +23,12 @@ namespace xdev {
 
     template <typename T, typename...Ts>
     static constexpr std::size_t type_index_v = type_index<T, Ts...>::value;
+
+    template <size_t idx, typename...Ts>
+    struct type_at {
+        using type = std::tuple_element_t<idx, std::tuple<Ts...>>;
+    };
+
+    template <size_t idx, typename...Ts>
+    using type_at_t = typename type_at<idx, Ts...>::type;
 }  // namespace xdev
