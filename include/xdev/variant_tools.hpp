@@ -4,8 +4,10 @@
 
 namespace xdev {
 
+#ifndef XDEV_TYPETRAITS_HPP
 template<class T>
 struct always_false : std::false_type {};
+#endif // XDEV_TYPETRAITS_HPP
 
 template<class T>
 inline constexpr bool always_false_v = always_false<T>::value;
