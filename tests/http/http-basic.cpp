@@ -311,3 +311,42 @@ TEST(HttpBasicTest, CustomBody) {
 
     srvctx.stop();
 }
+
+
+TEST(HttpBasicTest, NoAutoRegex) {
+    boost::asio::io_context srvctx;
+    using server_type = net::http::plain_server;
+    server_type srv{srvctx, {net::ip::address_v4::loopback(), 4242}};
+    srv.on("/test/<data>").complete([](const std::string& data) {
+        net::http::response<net::http::string_body> res{
+            std::piecewise_construct,
+            std::make_tuple(data),
+            std::make_tuple(net::http::status::ok, 10)
+        };
+        res.set(net::http::field::content_type, "text/plain");
+        res.content_length(res.body().size());
+        return res;
+    }).no_auto_regex();
+
+    std::atomic_bool ready = false;;
+
+    auto fut = std::async([&srvctx, &ready] {
+        srvctx.poll_one();
+        ready = true;
+        srvctx.run();
+    });
+
+    while (!ready)
+        std::this_thread::yield();
+
+    boost::asio::io_context ctx;
+    net::error_code ec;
+    net::http::response<net::http::string_body> reply;
+    net::http::client::async_get({"http://localhost:4242/test/a/b"}, reply, ctx, ec);
+
+    ctx.run();
+
+    ASSERT_EQ("a/b", reply.body());
+
+    srvctx.stop();
+}

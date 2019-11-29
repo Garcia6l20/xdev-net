@@ -9,6 +9,8 @@ FetchContent_MakeAvailable(googletest)
 link_libraries(${PROJECT_NAME} gtest gtest_main gmock)
 include_directories(${CMAKE_CURRENT_LIST_DIR})
 
+add_custom_target(${PROJECT_NAME}-tests)
+set(TEST_GROUP ${PROJECT_NAME}-tests)
 project(${PROJECT_NAME}-test)
 
 find_program(VALGRIND_EXE valgrind)
@@ -19,6 +21,7 @@ endif()
 macro(add_simple_test _name)
     add_executable(${PROJECT_NAME}-${_name} ${_name}.cpp)
     add_test(NAME ${PROJECT_NAME}-${_name} COMMAND ${PROJECT_NAME}-${_name})
+    add_dependencies(${TEST_GROUP} ${PROJECT_NAME}-${_name})
 endmacro()
 
 macro(auto_add_simple_tests)

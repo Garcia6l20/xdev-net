@@ -98,33 +98,6 @@ public:
                 using ResT = std::decay_t<decltype(result)>;
                 if constexpr (std::disjunction_v<std::is_same<std::remove_cvref_t<ResT>, response<BodyTypes>>...>) {
                     return std::move(result);
-                } else if constexpr (std::is_same_v<std::remove_cvref_t<ResT>, std::string>) {
-                    response<string_body> reply{
-                        std::piecewise_construct,
-                        std::make_tuple(result),
-                        std::make_tuple(status::ok, XDEV_NET_HTTP_DEFAULT_VERSION)
-                    };
-                    reply.set(field::content_type, "text/plain");
-                    reply.content_length(reply.body().size());
-                    return reply;
-                } else if constexpr (std::is_same_v<std::remove_cvref_t<ResT>, std::tuple<std::string, std::string>>) {
-                    response<string_body> reply{
-                        std::piecewise_construct,
-                        std::make_tuple(std::get<1>(result)),
-                        std::make_tuple(status::ok, XDEV_NET_HTTP_DEFAULT_VERSION)
-                    };
-                    reply.set(field::content_type, std::get<0>(result));
-                    reply.content_length(reply.body().size());
-                    return reply;
-                } else if constexpr (std::is_same_v<std::remove_cvref_t<ResT>, std::tuple<http::status, std::string, std::string>>) {
-                    response<string_body> reply{
-                        std::piecewise_construct,
-                        std::make_tuple(std::get<2>(result)),
-                        std::make_tuple(std::get<0>(result), XDEV_NET_HTTP_DEFAULT_VERSION)
-                    };
-                    reply.set(field::content_type, std::get<1>(result));
-                    reply.content_length(reply.body().size());
-                    return reply;
                 } else if constexpr (std::disjunction_v<std::is_same<std::remove_cvref_t<ResT>, typename BodyTypes::value_type>...>) {
                     response<typename body_traits::template body_of_value_t<ResT>> reply {
                         std::piecewise_construct,
@@ -132,9 +105,17 @@ public:
                         std::make_tuple(status::ok, XDEV_NET_HTTP_DEFAULT_VERSION)
                     };
                     return std::move(reply);
+                } else if constexpr (std::is_default_constructible_v<details::route_return_value<std::decay_t<ResT>>>) {
+                    return details::route_return_value<std::decay_t<ResT>>::make_response(result);
                 } else static_assert (always_false_v<ResT>, "Unhandled complete return type");
             };
             return *this;
+        }
+
+        void no_auto_regex() {
+            auto tok = _path_escaped.find('<');
+            tok = tok == std::string::npos ? tok : tok - 1;
+            _regex = _path_escaped.substr(0, tok) + "(.+)";
         }
 
         template <typename HandlerT>
