@@ -72,7 +72,9 @@ target_link_directories(${PROJECT_NAME} PUBLIC ${Boost_LIBRARY_DIRS})
 target_link_libraries(${PROJECT_NAME} PUBLIC Threads::Threads ${Boost_LIBRARIES} ${OPENSSL_LIBRARIES} ${MBEDTLS_LIBRARIES})
 
 if(WIN32)
-  target_link_libraries(${PROJECT_NAME} PUBLIC wsock32 ws2_32 debug msvcrtd)
+    target_link_libraries(${PROJECT_NAME} PUBLIC wsock32 ws2_32 debug msvcrtd)
+else()
+    target_link_libraries(${PROJECT_NAME} PUBLIC dl)
 endif()
 
 if(XDEV_UNIT_TESTING)

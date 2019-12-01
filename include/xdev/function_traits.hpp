@@ -4,6 +4,7 @@
 
 namespace xdev {
 
+#ifndef XDEV_TYPETRAITS_HPP
     namespace function_detail
     {
         template<typename Ret, typename Cls, typename IsMutable, typename IsLambda, typename... Args>
@@ -92,5 +93,6 @@ namespace xdev {
     struct function_traits<std::function<Ret(Args...)>>
         : function_detail::types<Ret, std::nullptr_t, std::true_type, std::false_type, Args...>
     {};
+#endif // XDEV_TYPETRAITS_HPP
 
 }  // namespace xdev
