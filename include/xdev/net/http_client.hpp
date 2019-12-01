@@ -52,6 +52,7 @@ public:
 
     template <typename ResponsetBodyType = beast::http::string_body, typename ChunkProvider>
     void post(ChunkProvider chunk_provider, response<ResponsetBodyType>& response, asio::yield_context yield, boost::system::error_code& ec) {
+        response = {};
         request<empty_body> req {http::verb::post, {_url.path().data(), _url.path().size()}, _http_version};
         req.chunked(true);
         if (!_wait_connected(yield, ec))
@@ -90,6 +91,7 @@ public:
 
     template <typename RequestBodyType = beast::http::string_body, typename ResponsetBodyType = beast::http::string_body>
     void process_request(beast::http::request<RequestBodyType>& request, beast::http::response<ResponsetBodyType>& response, asio::yield_context yield, boost::system::error_code& ec) {
+        response = {};
         if (!_wait_connected(yield, ec))
             return;
         std::string target = {_url.path().data(), _url.path().size()};
