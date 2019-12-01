@@ -54,7 +54,11 @@ public:
         }
         template <typename T>
         T& data() {
-            return *std::static_pointer_cast<T>(_data).get();
+            return *data_ptr<T>().get();
+        }
+        template <typename T>
+        std::shared_ptr<T> data_ptr() {
+            return std::static_pointer_cast<T>(_data);
         }
     private:
         typename body_traits::request_variant _request_var;
@@ -67,7 +71,7 @@ public:
 
     bool _close;
 
-    session(router_ptr router):
+    session(const router_ptr& router):
         _router{router} {
     }
 
@@ -99,6 +103,7 @@ public:
         beast::error_code ec;
         beast::flat_buffer buffer;
         context ctx;
+        ctx._data = _data;
         std::string chunk;
         chunk_extensions ce;
         auto chunk_header_cb = [&](std::uint64_t size, boost::string_view extensions, error_code&ec) mutable {
@@ -204,6 +209,9 @@ private:
     }
 
     router_ptr _router;
+
+public:
+    std::shared_ptr<void> _data;
 };
 
 template <typename...BodyTypes>
@@ -316,7 +324,17 @@ public:
         return _router->add_route(path);
     }
 
+    template <typename Functor>
+        //requires (std::same_as<std::shared_ptr<void>, std::invoke_result_t<Functor>>)
+    void on_session(Functor handler) {
+        _on_session = handler;
+    }
+
 private:
+
+    std::function<std::shared_ptr<void>()> _on_session = [] {
+        return nullptr;
+    };
     void _accept(asio::yield_context yield) {
         error_code ec;
         for (;;) {
@@ -334,6 +352,7 @@ private:
                     sess = std::make_shared<session_type>(std::move(_socket),
                                                           _router);
                 }
+                sess->_data = _on_session();
                 asio::spawn(_acceptor.get_executor(),
                             [sess] (asio::yield_context yield) {
                     sess->run(yield);

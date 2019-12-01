@@ -115,7 +115,7 @@ public:
         void no_auto_regex() {
             auto tok = _path_escaped.find('<');
             tok = tok == std::string::npos ? tok : tok - 1;
-            _regex = _path_escaped.substr(0, tok) + "(.+)";
+            _regex = _path_escaped.substr(0, tok) + "/?(.+)?";
         }
 
         template <typename HandlerT>
