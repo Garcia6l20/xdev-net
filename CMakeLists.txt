@@ -69,7 +69,7 @@ endif()
 
 target_include_directories(${PROJECT_NAME} PUBLIC include ${PROJECT_BINARY_DIR}/include ${${PROJECT_NAME}_EXTRA_INCLUDE_DIR} ${Boost_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
 target_link_directories(${PROJECT_NAME} PUBLIC ${Boost_LIBRARY_DIRS})
-target_link_libraries(${PROJECT_NAME} PUBLIC Threads::Threads ${Boost_LIBRARIES} ${OPENSSL_LIBRARIES} ${MBEDTLS_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} PUBLIC Threads::Threads ${Boost_LIBRARIES} ${OPENSSL_LIBRARIES} ${MBEDTLS_LIBRARIES} XDev::core)
 
 if(WIN32)
     target_link_libraries(${PROJECT_NAME} PUBLIC wsock32 ws2_32 debug msvcrtd)

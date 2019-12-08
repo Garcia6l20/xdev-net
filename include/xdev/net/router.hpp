@@ -28,6 +28,9 @@ public:
     using context_type = RouterContextT;
 
     struct not_found: std::exception {
+        not_found(const std::string& path) noexcept : _path{path} {}
+        const std::string& path() const noexcept { return _path; }
+        std::string _path;
     };
 
     base_router() = default;
@@ -193,7 +196,7 @@ public:
             if (std::get<0>(res))
                 return {route, std::move(std::get<1>(res))};
         }
-        throw not_found();
+        throw not_found{url};
     }
 
 private:

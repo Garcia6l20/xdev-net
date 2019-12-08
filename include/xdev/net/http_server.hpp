@@ -12,6 +12,8 @@
 #include <variant>
 #include <iostream>
 
+#include <xdev-logger.hpp>
+
 namespace xdev::net {
 
 namespace http {
@@ -21,6 +23,8 @@ class session {
 public:
 
     using body_traits = details::body_traits<string_body, file_body, dynamic_body, BodyTypes...>;
+
+    static XLogger logger;
 
     struct context {
         template <typename BodyType = string_body>
@@ -187,10 +191,12 @@ public:
                 } else {
                     throw std::runtime_error("bug");
                 }
-            } catch(const typename router_type::not_found&) {
+            } catch(const typename router_type::not_found& err) {
+                logger.debug("no route found for {}", err.path());
                 send(net::http::status::not_found, yield[ec]);
                 _close = true;
             } catch(const std::exception& err) {
+                logger.debug("internal error {}", err.what());
                 send(net::http::status::internal_server_error, err.what(), yield[ec]);
                 _close = true;
             }
@@ -213,6 +219,9 @@ private:
 public:
     std::shared_ptr<void> _data;
 };
+
+template <class Derived, typename...BodyTypes>
+XLogger session<Derived, BodyTypes...>::logger = {"xdev.http.session"};
 
 template <typename...BodyTypes>
 class plain_session: public session<plain_session<BodyTypes...>, BodyTypes...>,
